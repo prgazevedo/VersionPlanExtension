@@ -5,6 +5,7 @@ A VSCode extension that manages CLAUDE.md files across projects with automatic G
 ## Features
 
 - **Repository Management**: Initialize and sync with a GitHub repository for centralized CLAUDE.md storage
+- **Organized Structure**: Creates individual project folders (`ProjectName/CLAUDE.md`) for clean organization
 - **Template System**: Create CLAUDE.md files from predefined templates (Basic, Web Development, Data Science)
 - **Auto-Sync**: Automatically sync CLAUDE.md changes to the repository with auto-commit
 - **File Watching**: Monitor CLAUDE.md files for changes and sync automatically
@@ -151,9 +152,22 @@ To get debug information:
 
 ## Repository Structure
 
-The extension creates a project-specific CLAUDE.md file in the configured repository:
-- `project-name.md` - Configuration for each project
-- Auto-generated commit messages: "Update CLAUDE.md for {projectName}"
+The extension creates an organized folder structure in the configured repository:
+- `ProjectName/CLAUDE.md` - Each project gets its own folder with CLAUDE.md inside
+- `ProjectName/` - Folder named after your workspace/project
+- Auto-generated commit messages: "Update {ProjectName}/CLAUDE.md"
+
+Example repository structure:
+```
+your-claude-configs/
+├── MyWebApp/
+│   └── CLAUDE.md
+├── DataAnalysis/
+│   └── CLAUDE.md
+├── MobileApp/
+│   └── CLAUDE.md
+└── ...
+```
 
 ## License
 

@@ -127,7 +127,9 @@ export class RepositoryManager {
     }
 
     async getProjectConfigPath(projectName: string): Promise<string> {
-        const configPath = path.join(this.repoPath, `${projectName}.md`);
+        const projectDir = path.join(this.repoPath, projectName);
+        await fs.ensureDir(projectDir);
+        const configPath = path.join(projectDir, 'CLAUDE.md');
         return configPath;
     }
 }

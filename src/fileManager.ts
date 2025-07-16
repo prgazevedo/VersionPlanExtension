@@ -42,7 +42,7 @@ export class ClaudeFileManager {
             await fs.copy(this.workspaceClaudeFile, repoConfigPath);
 
             // Auto-commit if enabled
-            const commitMessage = `Update CLAUDE.md for ${projectName}`;
+            const commitMessage = `Update ${projectName}/CLAUDE.md`;
             await this.repositoryManager.autoCommit(commitMessage);
 
             updateStatusBar('CLAUDE.md synced to repository', false);
