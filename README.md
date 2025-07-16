@@ -25,7 +25,7 @@ A VSCode extension that manages CLAUDE.md files across projects with automatic G
 1. Clone the repository:
    ```bash
    git clone https://github.com/prgazevedo/VersionPlanExtension.git
-   cd VersionPlanExtension/claude-config-manager
+   cd VersionPlanExtension
    ```
 
 2. Install dependencies and compile:
@@ -93,7 +93,6 @@ When auto-sync is enabled:
 To build and test the extension:
 
 ```bash
-cd claude-config-manager
 npm install
 npm run compile
 ```
