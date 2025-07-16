@@ -39,7 +39,7 @@ export class TemplateManager {
     async getAvailableTemplates(): Promise<string[]> {
         try {
             const files = await fs.readdir(this.templatesPath);
-            return files.filter(file => file.endsWith('.md')).map(file => path.basename(file, '.md'));
+            return files.filter((file: string) => file.endsWith('.md')).map((file: string) => path.basename(file, '.md'));
         } catch {
             return ['basic', 'web-dev', 'data-science'];
         }
