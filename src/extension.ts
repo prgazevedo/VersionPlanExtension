@@ -16,10 +16,33 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('Claude Config Manager is now active!');
 
     try {
-        // Initialize managers
-        repositoryManager = new RepositoryManager(context);
-        fileManager = new ClaudeFileManager(context, repositoryManager);
-        templateManager = new TemplateManager(context);
+        // Initialize managers with individual error handling
+        console.log('Initializing RepositoryManager...');
+        try {
+            repositoryManager = new RepositoryManager(context);
+            console.log('RepositoryManager initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize RepositoryManager:', error);
+            throw error;
+        }
+        
+        console.log('Initializing ClaudeFileManager...');
+        try {
+            fileManager = new ClaudeFileManager(context, repositoryManager);
+            console.log('ClaudeFileManager initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize ClaudeFileManager:', error);
+            throw error;
+        }
+        
+        console.log('Initializing TemplateManager...');
+        try {
+            templateManager = new TemplateManager(context);
+            console.log('TemplateManager initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize TemplateManager:', error);
+            throw error;
+        }
 
         // Create status bar item
         statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -30,6 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(statusBarItem);
 
         // Register commands
+        console.log('Registering commands...');
         const commands = [
             vscode.commands.registerCommand('claude-config.init', () => initCommand(repositoryManager)),
             vscode.commands.registerCommand('claude-config.sync', () => syncCommand(repositoryManager, fileManager)),
@@ -38,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
         ];
 
         commands.forEach(command => context.subscriptions.push(command));
+        console.log('Commands registered successfully:', commands.length);
 
         // Start file watching if auto-sync is enabled
         if (vscode.workspace.getConfiguration('claude-config').get('autoSync')) {

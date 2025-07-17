@@ -5,12 +5,39 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { updateStatusBar } from './extension';
 
 export class RepositoryManager {
-    private git: SimpleGit;
+    private git: SimpleGit | null = null;
     private repoPath: string;
 
     constructor(private context: vscode.ExtensionContext) {
         this.repoPath = path.join(context.globalStorageUri.fsPath, 'claude-configs');
-        this.git = simpleGit(this.repoPath);
+        // Don't initialize git in constructor - let it be lazy-loaded
+    }
+
+    private async initializeGit(): Promise<void> {
+        try {
+            // Only initialize git if the directory exists and is a valid git repository
+            if (await fs.pathExists(this.repoPath)) {
+                const gitDir = path.join(this.repoPath, '.git');
+                if (await fs.pathExists(gitDir)) {
+                    this.git = simpleGit(this.repoPath);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to initialize git:', error);
+            this.git = null;
+        }
+    }
+
+    private async ensureGitInitialized(): Promise<SimpleGit> {
+        if (!this.git) {
+            await this.initializeGit();
+        }
+        
+        if (!this.git) {
+            throw new Error('Git not initialized. Repository may not exist.');
+        }
+        
+        return this.git;
     }
 
     async initializeRepo(repoUrl: string): Promise<boolean> {
@@ -27,6 +54,9 @@ export class RepositoryManager {
 
             // Clone the repository
             await simpleGit().clone(repoUrl, this.repoPath);
+            
+            // Initialize git instance for this repository
+            this.git = simpleGit(this.repoPath);
             
             // Update configuration
             await vscode.workspace.getConfiguration('claude-config').update(
@@ -55,20 +85,22 @@ export class RepositoryManager {
 
             updateStatusBar('Syncing changes...', false);
 
+            const git = await this.ensureGitInitialized();
+
             // Pull latest changes
-            await this.git.pull();
+            await git.pull();
 
             // Stage all changes
-            await this.git.add('.');
+            await git.add('.');
 
             // Check if there are any changes to commit
-            const status = await this.git.status();
+            const status = await git.status();
             if (status.files.length > 0) {
                 // Commit changes
-                await this.git.commit('Sync CLAUDE.md configurations');
+                await git.commit('Sync CLAUDE.md configurations');
 
                 // Push to remote
-                await this.git.push();
+                await git.push();
                 
                 updateStatusBar('Sync completed successfully!', false);
             } else {
@@ -93,13 +125,15 @@ export class RepositoryManager {
                 return;
             }
 
-            await this.git.pull();
-            await this.git.add('.');
+            const git = await this.ensureGitInitialized();
+
+            await git.pull();
+            await git.add('.');
             
-            const status = await this.git.status();
+            const status = await git.status();
             if (status.files.length > 0) {
-                await this.git.commit(message);
-                await this.git.push();
+                await git.commit(message);
+                await git.push();
                 updateStatusBar('Auto-committed changes', false);
             }
         } catch (error) {
@@ -115,7 +149,8 @@ export class RepositoryManager {
                 return false;
             }
 
-            const isGitRepo = await this.git.checkIsRepo();
+            const git = await this.ensureGitInitialized();
+            const isGitRepo = await git.checkIsRepo();
             return isGitRepo;
         } catch {
             return false;
