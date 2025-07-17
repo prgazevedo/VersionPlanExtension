@@ -1,0 +1,3 @@
+Icon placeholder - Create a 128x128 PNG icon with 'CC' text on dark background
+Suggested colors: Background #1e1e1e, Text #ffffff
+Use any image editor to create icon.png in this directory

@@ -15,11 +15,13 @@ A VSCode extension that manages CLAUDE.md files across projects with automatic G
 
 ### Option 1: Install from VSIX (Recommended)
 
-1. Download the latest `claude-config-manager-X.X.X.vsix` file from the [releases page](https://github.com/prgazevedo/VersionPlanExtension/releases)
+1. Download the latest `claude-config-manager-1.0.0.vsix` file from the [releases page](https://github.com/prgazevedo/VersionPlanExtension/releases)
 2. Open VSCode
 3. Go to Extensions view (`Ctrl+Shift+X` or `Cmd+Shift+X`)
 4. Click the `...` menu → `Install from VSIX...`
 5. Select the downloaded `.vsix` file
+
+**Direct Download**: [claude-config-manager-1.0.0.vsix](https://github.com/prgazevedo/VersionPlanExtension/releases/download/v1.0.0/claude-config-manager-1.0.0.vsix)
 
 ### Option 2: Install from Source
 
@@ -107,10 +109,34 @@ npm run compile
 
 ### Packaging
 
-To create a VSIX package:
+#### Option 1: Using the Automated Script (Recommended)
+
+Use the included packaging script for a complete build and package process:
 
 ```bash
-npm install -g vsce
+# Make script executable (if not already)
+chmod +x package.sh
+
+# Run the packaging script
+./package.sh
+
+# To also commit the VSIX file to git:
+COMMIT_VSIX=true ./package.sh
+```
+
+The script will:
+- Clean previous builds
+- Install dependencies
+- Compile TypeScript
+- Run linter
+- Package with VSCE
+- Optionally commit the VSIX file to git
+
+#### Option 2: Manual Packaging
+
+```bash
+npm install -g @vscode/vsce
+npm run compile
 vsce package
 ```
 

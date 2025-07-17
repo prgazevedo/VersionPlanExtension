@@ -3,7 +3,7 @@
   "displayName": "Claude Config Manager",
   "description": "Manage CLAUDE.MD files across projects with GitHub repository synchronization",
   "version": "1.0.0",
-  "publisher": "local-dev",
+  "publisher": "prgazevedo",
   "author": "Pedro Azevedo",
   "license": "MIT",
   "repository": {
@@ -20,6 +20,7 @@
   "categories": [
     "Other"
   ],
+  "icon": "assets/icon.png",
   "keywords": [
     "claude",
     "ai",
@@ -32,9 +33,18 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "claude-config.openSettings",
+        "title": "Open Settings",
+        "category": "Claude Config"
+      },
       {
         "command": "claude-config.init",
         "title": "Initialize Config Repository",
@@ -56,6 +66,26 @@
         "category": "Claude Config"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "claude-config.init",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "claude-config.sync",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "claude-config.create",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "claude-config.edit",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
     "configuration": {
       "title": "Claude Config Manager",
       "properties": {
@@ -93,7 +123,9 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "install-local": "code --install-extension ./claude-config-manager-1.0.0.vsix"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
