@@ -21,7 +21,7 @@ A VSCode extension that manages CLAUDE.md files across projects with automatic G
 4. Click the `...` menu → `Install from VSIX...`
 5. Select the downloaded `.vsix` file
 
-**Direct Download**: [claude-config-manager-1.0.0.vsix](https://github.com/prgazevedo/VersionPlanExtension/releases/download/v1.0.0/claude-config-manager-1.0.0.vsix)
+**Direct Download**: [claude-config-manager-1.0.0.vsix](https://github.com/prgazevedo/VersionPlanExtension/releases/latest/download/claude-config-manager-1.0.0.vsix)
 
 ### Option 2: Install from Source
 
@@ -194,6 +194,22 @@ your-claude-configs/
 │   └── CLAUDE.md
 └── ...
 ```
+
+## Version History
+
+### v1.0.0 (July 2025)
+- Initial release of Claude Config Manager
+- Core functionality for CLAUDE.md management and GitHub sync
+- Template system with Basic, Web Development, and Data Science templates
+- Auto-sync and auto-commit features
+- Status bar integration
+- **Bug Fix**: Fixed simple-git initialization error on extension activation
+- **Improvement**: Added lazy-loaded git initialization with proper error handling
+- **Enhancement**: Improved extension activation reliability
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 

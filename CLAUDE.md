@@ -43,6 +43,7 @@ This is a VSCode extension called "Claude Config Manager" that manages CLAUDE.md
 - **Template system**: Create CLAUDE.md files from predefined templates with variable substitution
 - **Git integration**: Full Git workflow with pull, commit, and push operations
 - **Status bar integration**: Shows sync status and provides quick access to sync command
+- **Source repository linking**: Automatically adds metadata linking back to the original project repository
 
 ## Configuration Settings
 - `claude-config.repositoryUrl` - GitHub repository URL for configs
@@ -63,3 +64,22 @@ This is a VSCode extension called "Claude Config Manager" that manages CLAUDE.md
 - `vscode` - VS Code API
 - `typescript` - Development dependency
 - `eslint` - Code linting
+
+## Recent Bug Fixes (v1.0.0)
+- Fixed simple-git initialization error on extension activation
+- Removed synchronous git initialization from constructor
+- Added lazy-loaded git initialization with proper error handling
+- Improved extension activation reliability
+- Added better debug logging for troubleshooting
+
+## New Features (v1.1.0)
+- **Source Repository Linking**: Automatically detects and adds source repository metadata to synced CLAUDE.md files
+- **Metadata Injection**: Adds both hidden HTML comments and visible markdown headers with project information
+- **URL Normalization**: Converts SSH URLs to HTTPS for better web compatibility
+- **Duplicate Prevention**: Prevents duplicate metadata when re-syncing files
+
+## Release Information
+- **Current Version**: v1.1.0
+- **Package File**: claude-config-manager-1.1.0.vsix
+- **Release Date**: July 2025
+- **GitHub Repository**: https://github.com/prgazevedo/VersionPlanExtension

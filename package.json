@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Manage CLAUDE.MD files across projects with GitHub repository synchronization",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "prgazevedo",
   "author": "Pedro Azevedo",
   "license": "MIT",

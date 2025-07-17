@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs-extra';
+import { simpleGit } from 'simple-git';
 import { RepositoryManager } from './repository';
 import { updateStatusBar } from './extension';
 
@@ -38,8 +39,14 @@ export class ClaudeFileManager {
             const projectName = this.getProjectName();
             const repoConfigPath = await this.repositoryManager.getProjectConfigPath(projectName);
 
-            // Copy workspace CLAUDE.md to repository
-            await fs.copy(this.workspaceClaudeFile, repoConfigPath);
+            // Read the original CLAUDE.md content
+            const originalContent = await fs.readFile(this.workspaceClaudeFile, 'utf-8');
+            
+            // Add metadata header with source repository information
+            const enhancedContent = await this.addRepositoryMetadata(originalContent, projectName);
+            
+            // Write the enhanced content to the repository
+            await fs.writeFile(repoConfigPath, enhancedContent);
 
             // Auto-commit if enabled
             const commitMessage = `Update ${projectName}/CLAUDE.md`;
@@ -167,5 +174,76 @@ export class ClaudeFileManager {
             return path.basename(vscode.workspace.workspaceFolders[0].uri.fsPath);
         }
         return 'default';
+    }
+
+    private async getSourceRepositoryUrl(): Promise<string | null> {
+        try {
+            if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+                return null;
+            }
+
+            const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+            const git = simpleGit(workspaceRoot);
+            
+            // Check if it's a git repository
+            if (!await git.checkIsRepo()) {
+                return null;
+            }
+
+            // Get the remote origin URL
+            const remotes = await git.getRemotes(true);
+            const origin = remotes.find(remote => remote.name === 'origin');
+            
+            if (origin && origin.refs.fetch) {
+                // Convert SSH URLs to HTTPS for better link compatibility
+                let url = origin.refs.fetch;
+                if (url.startsWith('git@github.com:')) {
+                    url = url.replace('git@github.com:', 'https://github.com/');
+                }
+                if (url.endsWith('.git')) {
+                    url = url.slice(0, -4);
+                }
+                return url;
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Failed to get source repository URL:', error);
+            return null;
+        }
+    }
+
+    private async addRepositoryMetadata(content: string, projectName: string): Promise<string> {
+        const sourceRepoUrl = await this.getSourceRepositoryUrl();
+        const currentDate = new Date().toISOString().split('T')[0];
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'Unknown';
+
+        let metadata = `<!-- CLAUDE CONFIG METADATA -->\n`;
+        metadata += `<!-- This file was automatically synced from the source repository -->\n`;
+        metadata += `<!-- Project: ${projectName} -->\n`;
+        metadata += `<!-- Last Updated: ${currentDate} -->\n`;
+        metadata += `<!-- Local Path: ${workspacePath} -->\n`;
+        
+        if (sourceRepoUrl) {
+            metadata += `<!-- Source Repository: ${sourceRepoUrl} -->\n`;
+        }
+        
+        metadata += `<!-- End Metadata -->\n\n`;
+
+        // Add a visible header as well for easier reading
+        let visibleHeader = '';
+        if (sourceRepoUrl) {
+            visibleHeader = `> **Source Repository**: [${projectName}](${sourceRepoUrl})  \n`;
+            visibleHeader += `> **Last Synced**: ${currentDate}  \n\n`;
+        }
+
+        // Check if the content already has metadata to avoid duplicates
+        if (content.includes('<!-- CLAUDE CONFIG METADATA -->')) {
+            // Remove existing metadata
+            content = content.replace(/<!-- CLAUDE CONFIG METADATA -->[\s\S]*?<!-- End Metadata -->\n\n/g, '');
+            content = content.replace(/> \*\*Source Repository\*\*:.*?\n> \*\*Last Synced\*\*:.*?\n\n/g, '');
+        }
+
+        return metadata + visibleHeader + content;
     }
 }
