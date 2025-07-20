@@ -87,7 +87,11 @@ jspm_packages/
 .claude/settings.local.json  # Local settings (auto-ignored by Claude Code)
 
 # Claude Config Manager Extension - Local files  
-.claude/.chats/          # Exported conversations (large, personal data)
+.claude/.chats          # Exported conversations (large, personal data)
+.claude/.chats/
+.claude/.chats/**
+.claude/.chats/*
+**/.claude/.chats/**
 
 # Team-sharable Claude Code files (should be tracked):
 # .claude/settings.json   # Team settings (official Claude Code)
