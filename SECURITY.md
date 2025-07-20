@@ -20,7 +20,8 @@ We take security seriously. If you discover a security vulnerability, please rep
    - Click "Report a vulnerability"
    - Provide detailed information about the vulnerability
 
-2. **Email**: Send details to prg.azevedo@icloud.com
+2. **Email**: For critical vulnerabilities, contact the maintainer privately
+   - Use GitHub's contact information from the repository
    - Subject: "[SECURITY] Claude Config Manager Vulnerability"
    - Include steps to reproduce
    - Include potential impact assessment
