@@ -5,7 +5,7 @@ out/
 
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json - now included for CodeQL analysis and reproducible builds
 
 # VSCode Extension packaging
 *.vsix
