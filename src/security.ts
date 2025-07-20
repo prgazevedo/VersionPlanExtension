@@ -50,8 +50,21 @@ export function validateRepoUrl(url: string): boolean {
         // Ensure it's a Git repository URL pattern
         const gitUrlPattern = /\.(git)$/i;
         if (parsed.protocol === 'https:' && !gitUrlPattern.test(parsed.pathname)) {
-            // Allow GitHub-style URLs without .git
-            if (!hostname.includes('github.com') && !hostname.includes('gitlab.com')) {
+            // Allow only trusted Git hosting providers with exact domain matching
+            const allowedHosts = [
+                'github.com',
+                'gitlab.com',
+                'bitbucket.org',
+                'dev.azure.com',
+                'ssh.dev.azure.com'
+            ];
+            
+            // Check for exact hostname match or trusted subdomain
+            const isAllowedHost = allowedHosts.some(allowedHost => {
+                return hostname === allowedHost || hostname.endsWith('.' + allowedHost);
+            });
+            
+            if (!isAllowedHost) {
                 return false;
             }
         }

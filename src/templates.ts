@@ -87,7 +87,7 @@ export class TemplateManager {
             const author = await vscode.window.showInputBox({
                 prompt: 'Enter author name',
                 placeHolder: 'Your name',
-                value: process.env.USER || process.env.USERNAME || 'Unknown'
+                value: 'Author' // Removed environment variable exposure for security
             });
 
             if (!author) return undefined;
