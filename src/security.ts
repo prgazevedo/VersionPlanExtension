@@ -14,7 +14,7 @@ export function sanitizeProjectName(name: string): string {
     
     // Remove path traversal sequences and dangerous characters
     return name
-        .replace(/[.\/\\:*?"<>|]/g, '_')  // Replace dangerous characters
+        .replace(/[./\\:*?"<>|]/g, '_')  // Replace dangerous characters
         .replace(/^\.+/, '')              // Remove leading dots
         .substring(0, 50)                 // Limit length
         .trim() || 'default';             // Fallback if empty
@@ -91,8 +91,8 @@ export function sanitizeErrorMessage(error: any): string {
     
     // Remove sensitive information patterns
     return errorMessage
-        .replace(/\/Users\/[^\/\s]+/g, '/Users/***')     // Remove usernames
-        .replace(/\/home\/[^\/\s]+/g, '/home/***')       // Remove Linux usernames  
+        .replace(/\/Users\/[^/\s]+/g, '/Users/***')     // Remove usernames
+        .replace(/\/home\/[^/\s]+/g, '/home/***')       // Remove Linux usernames  
         .replace(/C:\\Users\\[^\\s]+/g, 'C:\\Users\\***') // Remove Windows usernames
         .replace(/file:\/\/[^\s]+/g, 'file://***')       // Remove file paths
         .replace(/https?:\/\/[^\s]+/g, 'https://***')    // Remove URLs
