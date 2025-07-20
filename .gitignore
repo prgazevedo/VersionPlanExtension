@@ -3,6 +3,9 @@ out/
 *.js
 *.js.map
 
+# Exception: Include ESLint config file
+!eslint.config.js
+
 # Dependencies
 node_modules/
 # package-lock.json - now included for CodeQL analysis and reproducible builds
