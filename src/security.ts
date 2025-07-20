@@ -127,3 +127,20 @@ export function sanitizeTemplateVariable(value: string): string {
         .substring(0, 100)                // Limit length
         .trim();
 }
+
+/**
+ * Sanitizes file paths to prevent path traversal attacks
+ */
+export function sanitizePath(filePath: string): string {
+    if (!filePath || typeof filePath !== 'string') {
+        return '';
+    }
+    
+    // Resolve the path to normalize it and remove any .. sequences
+    const normalizedPath = path.resolve(filePath);
+    
+    // Remove null bytes and other dangerous characters
+    return normalizedPath
+        .replace(/\0/g, '')               // Remove null bytes
+        .replace(/[<>:"|?*]/g, '_');      // Replace dangerous characters for cross-platform compatibility
+}

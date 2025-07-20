@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a VSCode extension called "Claude Config Manager" that helps developers manage CLAUDE.md files for Claude Code with Git repository synchronization. The extension syncs CLAUDE.md files directly to the workspace's existing Git repository and includes a custom activity bar icon with sidebar integration.
+This is a VSCode extension called "Claude Config Manager" that provides comprehensive management for Claude Code workflows. The extension offers two main features:
+
+1. **CLAUDE.md Management**: Sync CLAUDE.md configuration files directly to the workspace's existing Git repository
+2. **Conversation History Browser**: Browse, view, and export Claude Code conversation history with a rich webview interface
+
+The extension includes a custom activity bar icon with dual sidebar views for both configuration management and conversation browsing.
 
 ## Development Commands
 
@@ -44,21 +49,40 @@ This is a VSCode extension called "Claude Config Manager" that helps developers 
 - Handles sync between workspace and its Git repository
 
 **ClaudeTreeDataProvider** (`src/claudeTreeProvider.ts`):
-- Implements VSCode TreeDataProvider for sidebar view
+- Implements VSCode TreeDataProvider for CLAUDE.md sidebar view
 - Shows CLAUDE.md status and provides action buttons
 - Integrates with activity bar custom icon
 
-**TemplateManager** (`src/templates.ts`):
-- Manages predefined templates (basic, web-dev, data-science)
-- Loads templates from `/templates/` directory
+**ConversationManager** (`src/conversation/ConversationManager.ts`):
+- Parses JSONL conversation files from Claude Code local storage
+- Manages conversation metadata and filtering
+- Handles conversation data path configuration and file watching
+
+**ConversationTreeProvider** (`src/conversation/ConversationTreeProvider.ts`):
+- Implements TreeDataProvider for conversation history sidebar
+- Groups conversations by project with expandable tree structure
+- Shows conversation summaries with timestamps and message counts
+
+**ConversationViewer** (`src/conversation/ConversationViewer.ts`):
+- Creates webview panels for displaying full conversations
+- Provides rich HTML interface with search functionality
+- Handles conversation export to multiple formats (Markdown, JSON, Text)
+
 
 ### Command Structure
 
 Commands are modularized in `/src/commands/`:
 
+**CLAUDE.md Commands:**
 - `sync.ts` - Git sync operations (pull, add, commit, push)
-- `create.ts` - Template-based CLAUDE.md creation
+- `create.ts` - CLAUDE.md creation with template support
 - `edit.ts` - Open CLAUDE.md in editor
+
+**Conversation Commands:**
+- `openConversations.ts` - Browse and manage conversation history
+  - `openConversationsCommand` - Quick pick conversation selector
+  - `viewConversationCommand` - Open conversation in webview
+  - `exportConversationCommand` - Export conversations to files
 
 ### Key Dependencies
 
@@ -70,20 +94,52 @@ Commands are modularized in `/src/commands/`:
 ### Asset Management
 
 - **Icon**: Custom PNG icon (`assets/claude-icon.png`) converted from SVG using Sharp
-- **Templates**: Predefined CLAUDE.md templates in `templates/` directory
 
 ## Configuration Settings
 
 The extension uses VSCode configuration with prefix `claude-config`:
 
+**CLAUDE.md Settings:**
 - `autoSync` - Enable automatic sync on file changes (default: false)
-- `defaultTemplate` - Default template selection (basic, web-dev, data-science)
+
+**Conversation Settings:**
+- `conversationDataPath` - Custom path to Claude conversation data directory (default: ~/.claude/projects)
+- `backupEnabled` - Enable backup of conversations to Git repository (default: false)
+- `backupRepository` - Git repository URL for conversation backups
+- `autoBackup` - Automatically backup conversations after each session (default: false)
+- `backupRetentionDays` - Number of days to retain conversation backups (default: 30)
 
 ## How It Works
 
+### CLAUDE.md Management
 The extension syncs CLAUDE.md files directly to the workspace's existing Git repository:
 
 - Works with any Git repository (no additional setup required)
 - Syncs `CLAUDE.md` in the workspace root
 - Uses workspace's existing Git configuration and remote
 - Commits directly to project's Git history with message "Update CLAUDE.md configuration"
+
+### Conversation History Browser
+The extension provides comprehensive conversation history management:
+
+**Data Source:**
+- Reads JSONL files from Claude Code's local storage (default: `~/.claude/projects/`)
+- Parses conversation metadata including timestamps, message counts, and project context
+- Groups conversations by project for organized browsing
+
+**Webview Interface:**
+- Rich HTML conversation viewer with VSCode theme integration
+- Real-time search functionality across conversation content
+- Message-by-message display with proper formatting for user/assistant exchanges
+- Tool usage display with syntax highlighting for tool calls and parameters
+
+**Export Capabilities:**
+- Export conversations to Markdown for documentation
+- Export to JSON for programmatic processing
+- Export to plain text for simple sharing
+- Preserves conversation structure and metadata in all formats
+
+**Security Features:**
+- Path sanitization prevents directory traversal attacks
+- Input validation on all user-provided paths and Git URLs
+- Safe parsing of JSONL files with error handling

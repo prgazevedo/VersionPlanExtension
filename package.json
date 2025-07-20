@@ -1,8 +1,8 @@
 {
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
-  "description": "Manage CLAUDE.MD files for Claude Code with workspace Git integration and custom activity bar icon",
-  "version": "2.0.0",
+  "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync and conversation history browser with Git integration",
+  "version": "3.0.0",
   "publisher": "prgazevedo",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -27,7 +27,12 @@
     "sync",
     "github",
     "template",
-    "markdown"
+    "markdown",
+    "conversation",
+    "history",
+    "chat",
+    "browser",
+    "export"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -52,6 +57,30 @@
         "title": "Edit CLAUDE.md",
         "category": "Claude Config",
         "icon": "$(edit)"
+      },
+      {
+        "command": "claude-config.openConversations",
+        "title": "Open Conversations",
+        "category": "Claude Config",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "claude-config.refreshConversations",
+        "title": "Refresh Conversations",
+        "category": "Claude Config",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claude-config.viewConversation",
+        "title": "View Conversation",
+        "category": "Claude Config",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "claude-config.exportConversation",
+        "title": "Export Conversation",
+        "category": "Claude Config",
+        "icon": "$(export)"
       }
     ],
     "viewsContainers": {
@@ -69,6 +98,11 @@
           "id": "claude-config",
           "name": "Claude Config",
           "when": "workspaceFolderCount > 0"
+        },
+        {
+          "id": "claude-conversations",
+          "name": "Conversations",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     },
@@ -76,6 +110,11 @@
       {
         "view": "claude-config",
         "contents": "Manage your CLAUDE.md configuration file.\n[Create CLAUDE.md](command:claude-config.create)\n[Edit CLAUDE.md](command:claude-config.edit)\n[Sync to Git](command:claude-config.sync)",
+        "when": "workspaceFolderCount > 0"
+      },
+      {
+        "view": "claude-conversations",
+        "contents": "Browse and manage your Claude conversations.\n[Open Conversations](command:claude-config.openConversations)\n[Refresh](command:claude-config.refreshConversations)",
         "when": "workspaceFolderCount > 0"
       }
     ],
@@ -96,6 +135,29 @@
             "web-dev",
             "data-science"
           ]
+        },
+        "claude-config.conversationDataPath": {
+          "type": "string",
+          "description": "Custom path to Claude conversation data directory (leave empty for default ~/.claude/projects)"
+        },
+        "claude-config.backupEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable backup of conversations to Git repository"
+        },
+        "claude-config.backupRepository": {
+          "type": "string",
+          "description": "Git repository URL for conversation backups"
+        },
+        "claude-config.autoBackup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically backup conversations after each session"
+        },
+        "claude-config.backupRetentionDays": {
+          "type": "number",
+          "default": 30,
+          "description": "Number of days to retain conversation backups"
         }
       }
     }
