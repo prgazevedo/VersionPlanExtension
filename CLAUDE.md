@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a VSCode extension called "Claude Config Manager" that helps developers manage CLAUDE.md files across projects with automatic GitHub repository synchronization. The extension creates a centralized system for storing and syncing CLAUDE.md configuration files organized by project name.
+This is a VSCode extension called "Claude Config Manager" that helps developers manage CLAUDE.md files for Claude Code with Git repository synchronization. The extension syncs CLAUDE.md files directly to the workspace's existing Git repository and includes a custom activity bar icon with sidebar integration.
 
 ## Development Commands
 
@@ -35,15 +35,18 @@ This is a VSCode extension called "Claude Config Manager" that helps developers 
 
 **RepositoryManager** (`src/repository.ts`):
 - Handles Git operations using `simple-git` library
-- Manages repository initialization, cloning, and syncing
-- Implements auto-commit functionality with project-specific commit messages
-- Stores repository in VSCode global storage path
+- Implements lazy Git initialization for better performance
+- Manages workspace Git operations (not centralized repository)
 
 **ClaudeFileManager** (`src/fileManager.ts`):
-- Manages CLAUDE.md files in workspace and repository
+- Manages CLAUDE.md files in workspace
 - Implements file watching for auto-sync functionality
-- Handles bidirectional sync between workspace and repository
-- Creates project-specific folder structure (`ProjectName/CLAUDE.md`)
+- Handles sync between workspace and its Git repository
+
+**ClaudeTreeDataProvider** (`src/claudeTreeProvider.ts`):
+- Implements VSCode TreeDataProvider for sidebar view
+- Shows CLAUDE.md status and provides action buttons
+- Integrates with activity bar custom icon
 
 **TemplateManager** (`src/templates.ts`):
 - Manages predefined templates (basic, web-dev, data-science)
@@ -53,8 +56,7 @@ This is a VSCode extension called "Claude Config Manager" that helps developers 
 
 Commands are modularized in `/src/commands/`:
 
-- `init.ts` - Repository initialization
-- `sync.ts` - Manual sync operations
+- `sync.ts` - Git sync operations (pull, add, commit, push)
 - `create.ts` - Template-based CLAUDE.md creation
 - `edit.ts` - Open CLAUDE.md in editor
 
@@ -62,28 +64,26 @@ Commands are modularized in `/src/commands/`:
 
 - `simple-git` - Git operations
 - `fs-extra` - Enhanced file system operations
+- `sharp` - SVG to PNG icon conversion (development only)
 - VSCode API for extension functionality
+
+### Asset Management
+
+- **Icon**: Custom PNG icon (`assets/claude-icon.png`) converted from SVG using Sharp
+- **Templates**: Predefined CLAUDE.md templates in `templates/` directory
 
 ## Configuration Settings
 
 The extension uses VSCode configuration with prefix `claude-config`:
 
-- `repositoryUrl` - GitHub repository URL for centralized storage
-- `autoSync` - Enable automatic sync on file changes
-- `autoCommit` - Automatically commit and push changes
-- `defaultTemplate` - Default template selection
+- `autoSync` - Enable automatic sync on file changes (default: false)
+- `defaultTemplate` - Default template selection (basic, web-dev, data-science)
 
-## Repository Structure Pattern
+## How It Works
 
-The extension creates organized folder structure in the configured repository:
+The extension syncs CLAUDE.md files directly to the workspace's existing Git repository:
 
-```text
-your-claude-configs/
-├── ProjectName1/
-│   └── CLAUDE.md
-├── ProjectName2/
-│   └── CLAUDE.md
-└── ...
-```
-
-Project names are derived from the workspace folder basename, and each project gets its own dedicated folder with auto-generated commit messages like "Update {ProjectName}/CLAUDE.md".
+- Works with any Git repository (no additional setup required)
+- Syncs `CLAUDE.md` in the workspace root
+- Uses workspace's existing Git configuration and remote
+- Commits directly to project's Git history with message "Update CLAUDE.md configuration"

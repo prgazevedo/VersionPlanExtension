@@ -5,12 +5,21 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { updateStatusBar } from './extension';
 
 export class RepositoryManager {
-    private git: SimpleGit;
+    private git: SimpleGit | undefined;
     private repoPath: string;
 
     constructor(private context: vscode.ExtensionContext) {
         this.repoPath = path.join(context.globalStorageUri.fsPath, 'claude-configs');
-        this.git = simpleGit(this.repoPath);
+        // Don't initialize git until we ensure the directory exists
+    }
+
+    private async getGit(): Promise<SimpleGit> {
+        if (!this.git) {
+            // Ensure the directory exists before creating git instance
+            await fs.ensureDir(this.repoPath);
+            this.git = simpleGit(this.repoPath);
+        }
+        return this.git;
     }
 
     async initializeRepo(repoUrl: string): Promise<boolean> {
@@ -27,6 +36,9 @@ export class RepositoryManager {
 
             // Clone the repository
             await simpleGit().clone(repoUrl, this.repoPath);
+            
+            // Initialize git instance for this repository
+            this.git = simpleGit(this.repoPath);
             
             // Update configuration
             await vscode.workspace.getConfiguration('claude-config').update(
@@ -56,19 +68,20 @@ export class RepositoryManager {
             updateStatusBar('Syncing changes...', false);
 
             // Pull latest changes
-            await this.git.pull();
+            const git = await this.getGit();
+            await git.pull();
 
             // Stage all changes
-            await this.git.add('.');
+            await git.add('.');
 
             // Check if there are any changes to commit
-            const status = await this.git.status();
+            const status = await git.status();
             if (status.files.length > 0) {
                 // Commit changes
-                await this.git.commit('Sync CLAUDE.md configurations');
+                await git.commit('Sync CLAUDE.md configurations');
 
                 // Push to remote
-                await this.git.push();
+                await git.push();
                 
                 updateStatusBar('Sync completed successfully!', false);
             } else {
@@ -93,13 +106,14 @@ export class RepositoryManager {
                 return;
             }
 
-            await this.git.pull();
-            await this.git.add('.');
+            const git = await this.getGit();
+            await git.pull();
+            await git.add('.');
             
-            const status = await this.git.status();
+            const status = await git.status();
             if (status.files.length > 0) {
-                await this.git.commit(message);
-                await this.git.push();
+                await git.commit(message);
+                await git.push();
                 updateStatusBar('Auto-committed changes', false);
             }
         } catch (error) {
@@ -115,8 +129,32 @@ export class RepositoryManager {
                 return false;
             }
 
-            const isGitRepo = await this.git.checkIsRepo();
-            return isGitRepo;
+            const git = await this.getGit();
+            const isGitRepo = await git.checkIsRepo();
+            if (!isGitRepo) {
+                return false;
+            }
+
+            // Check if we have a configured repository URL
+            const configuredUrl = vscode.workspace.getConfiguration('claude-config').get('repositoryUrl') as string;
+            if (configuredUrl) {
+                // Verify the remote origin matches the configured URL
+                const remotes = await git.getRemotes(true);
+                const origin = remotes.find(remote => remote.name === 'origin');
+                if (origin && origin.refs.fetch) {
+                    // Normalize URLs for comparison (handle .git suffix and protocol differences)
+                    const normalizeUrl = (url: string) => {
+                        return url.replace(/\.git$/, '').replace(/^git@github\.com:/, 'https://github.com/');
+                    };
+                    
+                    const normalizedConfigured = normalizeUrl(configuredUrl);
+                    const normalizedOrigin = normalizeUrl(origin.refs.fetch);
+                    
+                    return normalizedConfigured === normalizedOrigin;
+                }
+            }
+
+            return true; // If no configured URL, assume it's initialized
         } catch {
             return false;
         }
@@ -124,6 +162,42 @@ export class RepositoryManager {
 
     getRepoPath(): string {
         return this.repoPath;
+    }
+
+    async autoDetectRepository(): Promise<boolean> {
+        try {
+            // Check if repository exists but might not be properly configured
+            const repoExists = await fs.pathExists(this.repoPath);
+            if (!repoExists) {
+                return false;
+            }
+
+            const git = await this.getGit();
+            const isGitRepo = await git.checkIsRepo();
+            if (!isGitRepo) {
+                return false;
+            }
+
+            // Get the remote origin URL
+            const remotes = await git.getRemotes(true);
+            const origin = remotes.find(remote => remote.name === 'origin');
+            if (origin && origin.refs.fetch) {
+                // Auto-configure the repository URL in settings
+                await vscode.workspace.getConfiguration('claude-config').update(
+                    'repositoryUrl', 
+                    origin.refs.fetch, 
+                    vscode.ConfigurationTarget.Global
+                );
+                
+                console.log(`Auto-detected and configured repository: ${origin.refs.fetch}`);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Failed to auto-detect repository:', error);
+            return false;
+        }
     }
 
     async getProjectConfigPath(projectName: string): Promise<string> {

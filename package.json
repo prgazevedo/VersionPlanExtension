@@ -36,43 +36,56 @@
   "contributes": {
     "commands": [
       {
-        "command": "claude-config.init",
-        "title": "Initialize Config Repository",
-        "category": "Claude Config"
-      },
-      {
         "command": "claude-config.sync",
-        "title": "Sync to Repository",
-        "category": "Claude Config"
+        "title": "Sync to Git",
+        "category": "Claude Config",
+        "icon": "$(sync)"
       },
       {
         "command": "claude-config.create",
         "title": "Create from Template",
-        "category": "Claude Config"
+        "category": "Claude Config",
+        "icon": "$(file-add)"
       },
       {
         "command": "claude-config.edit",
         "title": "Edit CLAUDE.md",
-        "category": "Claude Config"
+        "category": "Claude Config",
+        "icon": "$(edit)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claude-config-container",
+          "title": "Claude Config",
+          "icon": "./assets/claude-icon.png"
+        }
+      ]
+    },
+    "views": {
+      "claude-config-container": [
+        {
+          "id": "claude-config",
+          "name": "Claude Config",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "claude-config",
+        "contents": "Manage your CLAUDE.md configuration file.\n[Create CLAUDE.md](command:claude-config.create)\n[Edit CLAUDE.md](command:claude-config.edit)\n[Sync to Git](command:claude-config.sync)",
+        "when": "workspaceFolderCount > 0"
       }
     ],
     "configuration": {
       "title": "Claude Config Manager",
       "properties": {
-        "claude-config.repositoryUrl": {
-          "type": "string",
-          "default": "",
-          "description": "GitHub repository URL for storing CLAUDE.md configurations"
-        },
         "claude-config.autoSync": {
           "type": "boolean",
-          "default": true,
-          "description": "Automatically sync CLAUDE.md changes to repository"
-        },
-        "claude-config.autoCommit": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically commit changes to repository"
+          "default": false,
+          "description": "Automatically sync CLAUDE.md changes to git repository"
         },
         "claude-config.defaultTemplate": {
           "type": "string",
@@ -102,6 +115,7 @@
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
     "eslint": "^8.28.0",
+    "sharp": "^0.34.3",
     "typescript": "^4.9.4"
   },
   "dependencies": {
