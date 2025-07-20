@@ -47,12 +47,6 @@
         "icon": "$(sync)"
       },
       {
-        "command": "claude-config.create",
-        "title": "Create from Template",
-        "category": "Claude Config",
-        "icon": "$(file-add)"
-      },
-      {
         "command": "claude-config.edit",
         "title": "Edit CLAUDE.md",
         "category": "Claude Config",
@@ -109,7 +103,7 @@
     "viewsWelcome": [
       {
         "view": "claude-config",
-        "contents": "Manage your CLAUDE.md configuration file.\n[Create CLAUDE.md](command:claude-config.create)\n[Edit CLAUDE.md](command:claude-config.edit)\n[Sync to Git](command:claude-config.sync)",
+        "contents": "Manage your CLAUDE.md configuration file.\n[Edit CLAUDE.md](command:claude-config.edit)\n[Sync to Git](command:claude-config.sync)",
         "when": "workspaceFolderCount > 0"
       },
       {
@@ -125,16 +119,6 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically sync CLAUDE.md changes to git repository"
-        },
-        "claude-config.defaultTemplate": {
-          "type": "string",
-          "default": "basic",
-          "description": "Default template to use when creating new CLAUDE.md files",
-          "enum": [
-            "basic",
-            "web-dev",
-            "data-science"
-          ]
         },
         "claude-config.conversationDataPath": {
           "type": "string",

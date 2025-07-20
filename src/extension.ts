@@ -1,19 +1,16 @@
 import * as vscode from 'vscode';
 import { RepositoryManager } from './repository';
 import { ClaudeFileManager } from './fileManager';
-import { TemplateManager } from './templates';
 import { ClaudeTreeDataProvider } from './claudeTreeProvider';
 import { ConversationManager } from './conversation/ConversationManager';
 import { ConversationTreeProvider } from './conversation/ConversationTreeProvider';
 import { ConversationViewer } from './conversation/ConversationViewer';
 import { syncCommand } from './commands/sync';
-import { createCommand } from './commands/create';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand } from './commands/openConversations';
 
 let repositoryManager: RepositoryManager;
 let fileManager: ClaudeFileManager;
-let templateManager: TemplateManager;
 let conversationManager: ConversationManager;
 let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
@@ -25,7 +22,6 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize managers
     repositoryManager = new RepositoryManager(context);
     fileManager = new ClaudeFileManager(context, repositoryManager);
-    templateManager = new TemplateManager(context);
     conversationManager = new ConversationManager(context);
     conversationTreeProvider = new ConversationTreeProvider(conversationManager);
     conversationViewer = new ConversationViewer(context, conversationManager);
@@ -52,7 +48,6 @@ export function activate(context: vscode.ExtensionContext) {
     // Register commands
     const commands = [
         vscode.commands.registerCommand('claude-config.sync', () => syncCommand(repositoryManager, fileManager)),
-        vscode.commands.registerCommand('claude-config.create', () => createCommand(templateManager, fileManager)),
         vscode.commands.registerCommand('claude-config.edit', () => editCommand(fileManager)),
         vscode.commands.registerCommand('claude-config.openConversations', () => openConversationsCommand(conversationManager, conversationViewer)),
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),

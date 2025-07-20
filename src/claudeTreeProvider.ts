@@ -31,11 +31,11 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         items.push(new ClaudeTreeItem(
             claudeFileExists ? 'CLAUDE.md ✓' : 'CLAUDE.md (not found)',
             claudeFileExists ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.None,
-            {
-                command: claudeFileExists ? 'claude-config.edit' : 'claude-config.create',
-                title: claudeFileExists ? 'Edit CLAUDE.md' : 'Create CLAUDE.md',
+            claudeFileExists ? {
+                command: 'claude-config.edit',
+                title: 'Edit CLAUDE.md',
                 arguments: []
-            },
+            } : undefined,
             claudeFileExists ? 'file' : 'file-missing'
         ));
 
@@ -53,16 +53,6 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             ));
         }
 
-        items.push(new ClaudeTreeItem(
-            'Create from Template',
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.create',
-                title: 'Create from Template',
-                arguments: []
-            },
-            'file-add'
-        ));
 
         return items;
     }

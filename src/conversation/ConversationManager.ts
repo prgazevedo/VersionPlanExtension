@@ -139,8 +139,8 @@ export class ConversationManager {
 
     async loadConversation(filePath: string): Promise<ConversationSession | null> {
         try {
-            const fullPath = path.join(this.claudeDataPath, filePath);
-            const content = await fs.readFile(fullPath, 'utf8');
+            // filePath is already the absolute path from getConversationSummary
+            const content = await fs.readFile(filePath, 'utf8');
             const lines = content.trim().split('\n').filter(line => line.trim());
             
             if (lines.length === 0) {
@@ -170,7 +170,7 @@ export class ConversationManager {
                 startTime: firstMessage.timestamp,
                 endTime: lastMessage.timestamp,
                 messageCount: messages.length,
-                filePath: fullPath,
+                filePath: filePath,
                 messages
             };
         } catch (error) {

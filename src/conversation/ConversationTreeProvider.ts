@@ -13,8 +13,9 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     }
 
     refresh(): void {
-        this.loadConversations();
-        this._onDidChangeTreeData.fire();
+        this.loadConversations().then(() => {
+            this._onDidChangeTreeData.fire();
+        });
     }
 
     private async loadConversations(): Promise<void> {

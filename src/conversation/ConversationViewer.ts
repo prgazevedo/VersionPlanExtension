@@ -27,19 +27,16 @@ export class ConversationViewer {
 
             this.panel = vscode.window.createWebviewPanel(
                 'conversationViewer',
-                `Conversation: ${conversationSummary.projectName}`,
+                `💬 ${conversationSummary.projectName}`,
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    retainContextWhenHidden: true,
-                    localResourceRoots: [
-                        vscode.Uri.file(path.join(this.context.extensionPath, 'out', 'webview'))
-                    ]
+                    retainContextWhenHidden: true
                 }
             );
 
-            // Set the webview content
-            this.panel.webview.html = this.getWebviewContent(conversation);
+            // Set the webview content using conversation summary + messages
+            this.panel.webview.html = this.getWebviewContent(conversationSummary, conversation);
 
             // Handle messages from the webview
             this.panel.webview.onDidReceiveMessage(
@@ -60,17 +57,18 @@ export class ConversationViewer {
         }
     }
 
-    private getWebviewContent(conversation: ConversationSession): string {
-        const messages = conversation.messages.map(msg => this.formatMessage(msg));
-        const conversationData = JSON.stringify({
-            session: {
-                sessionId: conversation.sessionId,
-                projectPath: conversation.projectPath,
-                startTime: conversation.startTime,
-                endTime: conversation.endTime,
-                messageCount: conversation.messageCount
-            },
-            messages: messages
+    private getWebviewContent(conversationSummary: ConversationSummary, conversation: ConversationSession): string {
+        // Extract simple conversation text with timestamps and tool details
+        let conversationText = '';
+        
+        conversation.messages.forEach(message => {
+            const role = message.type === 'user' ? 'User' : 'Claude';
+            const timestamp = new Date(message.timestamp).toLocaleString();
+            const content = this.extractDetailedContent(message.message.content);
+            
+            if (content.trim()) {
+                conversationText += `${role} (${timestamp}):\n${content}\n\n---\n\n`;
+            }
         });
 
         return `<!DOCTYPE html>
@@ -78,7 +76,7 @@ export class ConversationViewer {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Conversation Viewer</title>
+    <title>Claude Conversation</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -88,295 +86,204 @@ export class ConversationViewer {
             color: var(--vscode-editor-foreground);
             line-height: 1.6;
         }
-
-        .conversation-header {
-            margin-bottom: 20px;
-            padding: 15px;
+        .header {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
-            border-radius: 6px;
-            border-left: 4px solid var(--vscode-activityBarBadge-background);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--vscode-panel-border);
         }
-
-        .conversation-meta {
+        .header h1 {
+            margin: 0 0 15px 0;
+            color: var(--vscode-textLink-foreground);
+            font-size: 24px;
+        }
+        .metadata {
             display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 10px 20px;
-            font-size: 0.9em;
-            color: var(--vscode-descriptionForeground);
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            font-size: 14px;
         }
-
-        .conversation-meta strong {
-            color: var(--vscode-editor-foreground);
-        }
-
-        .message {
-            margin-bottom: 20px;
-            padding: 15px;
-            border-radius: 6px;
-            position: relative;
-        }
-
-        .message.user {
-            background-color: var(--vscode-inputOption-activeBackground);
-            border-left: 4px solid var(--vscode-button-background);
-        }
-
-        .message.assistant {
-            background-color: var(--vscode-editor-inactiveSelectionBackground);
-            border-left: 4px solid var(--vscode-activityBarBadge-background);
-        }
-
-        .message-header {
+        .metadata-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
-            font-size: 0.9em;
+        }
+        .metadata-label {
+            font-weight: 600;
             color: var(--vscode-descriptionForeground);
+            margin-right: 10px;
         }
-
-        .message-role {
-            font-weight: bold;
+        .metadata-value {
             color: var(--vscode-editor-foreground);
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
         }
-
-        .message-timestamp {
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 0.8em;
-        }
-
-        .message-content {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .tool-use {
-            background-color: var(--vscode-terminal-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 4px;
-            padding: 10px;
-            margin: 10px 0;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 0.9em;
-        }
-
-        .tool-name {
-            color: var(--vscode-symbolIcon-functionForeground);
-            font-weight: bold;
-        }
-
-        .json-content {
-            background-color: var(--vscode-textCodeBlock-background);
-            border-radius: 4px;
-            padding: 10px;
-            margin: 5px 0;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 0.85em;
-            overflow-x: auto;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .collapsible {
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .collapsible:hover {
-            background-color: var(--vscode-list-hoverBackground);
-        }
-
-        .content-collapsed {
-            display: none;
-        }
-
-        .search-box {
+        .search-container {
             margin-bottom: 20px;
-            padding: 10px;
+        }
+        .search-container input {
             width: 100%;
+            padding: 12px;
             background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
             color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
             font-size: 14px;
         }
-
-        .search-box:focus {
-            outline: none;
-            border-color: var(--vscode-focusBorder);
+        .conversation {
+            background-color: var(--vscode-editor-inactiveSelectionBackground);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--vscode-panel-border);
+            white-space: pre-wrap;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.7;
         }
-
-        .highlight {
-            background-color: var(--vscode-editor-findMatchHighlightBackground);
-            border-radius: 2px;
+        .export-buttons {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+        }
+        .export-btn {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .export-btn:hover {
+            background-color: var(--vscode-button-hoverBackground);
         }
     </style>
 </head>
 <body>
-    <div class="conversation-header">
-        <h2>Claude Conversation</h2>
-        <div class="conversation-meta">
-            <strong>Session ID:</strong> <span id="sessionId"></span>
-            <strong>Project:</strong> <span id="projectPath"></span>
-            <strong>Started:</strong> <span id="startTime"></span>
-            <strong>Ended:</strong> <span id="endTime"></span>
-            <strong>Duration:</strong> <span id="duration"></span>
-            <strong>Messages:</strong> <span id="messageCount"></span>
+    <div class="export-buttons">
+        <button class="export-btn" onclick="exportConversation('md')">📄 MD</button>
+        <button class="export-btn" onclick="exportConversation('json')">📋 JSON</button>
+        <button class="export-btn" onclick="exportConversation('txt')">📝 TXT</button>
+    </div>
+
+    <div class="header">
+        <h1>💬 Claude Conversation</h1>
+        <div class="metadata">
+            <div class="metadata-item">
+                <span class="metadata-label">Session ID:</span>
+                <span class="metadata-value">${conversation.sessionId || 'Unknown'}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Project:</span>
+                <span class="metadata-value">${conversationSummary.projectName || 'Unknown'}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Started:</span>
+                <span class="metadata-value">${new Date(conversationSummary.startTime).toLocaleString()}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Ended:</span>
+                <span class="metadata-value">${conversationSummary.endTime ? new Date(conversationSummary.endTime).toLocaleString() : 'Ongoing'}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Duration:</span>
+                <span class="metadata-value">${conversationSummary.duration || 'Unknown'}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Messages:</span>
+                <span class="metadata-value">${conversationSummary.messageCount || 0}</span>
+            </div>
         </div>
     </div>
 
-    <input type="text" class="search-box" placeholder="Search conversation..." id="searchBox">
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="🔍 Search conversation..." oninput="filterContent()">
+    </div>
 
-    <div id="messagesContainer"></div>
+    <div class="conversation" id="conversationContent">${this.escapeHtml(conversationText)}</div>
 
     <script>
-        const conversationData = ${conversationData};
+        function filterContent() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const content = document.getElementById('conversationContent');
+            const originalText = ${JSON.stringify(conversationText)};
+            
+            if (searchTerm === '') {
+                content.innerHTML = originalText;
+                return;
+            }
+            
+            const lines = originalText.split('\\n');
+            const filteredLines = lines.filter(line => 
+                line.toLowerCase().includes(searchTerm)
+            );
+            
+            content.innerHTML = filteredLines.join('\\n');
+        }
         
-        // Initialize the conversation view
-        function initializeConversation() {
-            const session = conversationData.session;
-            
-            document.getElementById('sessionId').textContent = session.sessionId;
-            document.getElementById('projectPath').textContent = session.projectPath;
-            document.getElementById('startTime').textContent = new Date(session.startTime).toLocaleString();
-            document.getElementById('endTime').textContent = session.endTime ? new Date(session.endTime).toLocaleString() : 'Ongoing';
-            document.getElementById('messageCount').textContent = session.messageCount;
-            
-            // Calculate duration
-            if (session.endTime) {
-                const duration = new Date(session.endTime) - new Date(session.startTime);
-                const minutes = Math.floor(duration / 60000);
-                const hours = Math.floor(minutes / 60);
-                document.getElementById('duration').textContent = hours > 0 ? 
-                    \`\${hours}h \${minutes % 60}m\` : \`\${minutes}m\`;
-            } else {
-                document.getElementById('duration').textContent = 'Ongoing';
-            }
-
-            renderMessages();
-            setupSearch();
-        }
-
-        function renderMessages() {
-            const container = document.getElementById('messagesContainer');
-            container.innerHTML = '';
-
-            conversationData.messages.forEach((message, index) => {
-                const messageElement = createMessageElement(message, index);
-                container.appendChild(messageElement);
+        function exportConversation(format) {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                command: 'export',
+                format: format
             });
         }
-
-        function createMessageElement(message, index) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = \`message \${message.role}\`;
-            messageDiv.setAttribute('data-message-index', index);
-
-            const headerDiv = document.createElement('div');
-            headerDiv.className = 'message-header';
-            headerDiv.innerHTML = \`
-                <span class="message-role">\${message.role === 'user' ? '👤 User' : '🤖 Assistant'}</span>
-                <span class="message-timestamp">\${new Date(message.timestamp).toLocaleString()}</span>
-            \`;
-
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.innerHTML = formatMessageContent(message);
-
-            messageDiv.appendChild(headerDiv);
-            messageDiv.appendChild(contentDiv);
-
-            return messageDiv;
-        }
-
-        function formatMessageContent(message) {
-            if (typeof message.content === 'string') {
-                return escapeHtml(message.content);
-            } else if (Array.isArray(message.content)) {
-                return message.content.map(item => {
-                    if (item.type === 'text') {
-                        return escapeHtml(item.text);
-                    } else if (item.type === 'tool_use') {
-                        return \`<div class="tool-use">
-                            <div class="tool-name">🔧 \${item.name}</div>
-                            <div class="json-content">\${JSON.stringify(item.input, null, 2)}</div>
-                        </div>\`;
-                    }
-                    return '';
-                }).join('');
-            }
-            return 'No content';
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function setupSearch() {
-            const searchBox = document.getElementById('searchBox');
-            searchBox.addEventListener('input', (e) => {
-                const searchTerm = e.target.value.toLowerCase();
-                searchMessages(searchTerm);
-            });
-        }
-
-        function searchMessages(searchTerm) {
-            const messages = document.querySelectorAll('.message');
-            
-            messages.forEach(message => {
-                const content = message.textContent.toLowerCase();
-                if (searchTerm === '' || content.includes(searchTerm)) {
-                    message.style.display = 'block';
-                    if (searchTerm !== '') {
-                        highlightText(message, searchTerm);
-                    } else {
-                        removeHighlights(message);
-                    }
-                } else {
-                    message.style.display = 'none';
-                }
-            });
-        }
-
-        function highlightText(element, searchTerm) {
-            // Simple text highlighting
-            const content = element.querySelector('.message-content');
-            if (content) {
-                const text = content.textContent;
-                const regex = new RegExp(\`(\${searchTerm})\`, 'gi');
-                const highlightedText = text.replace(regex, '<span class="highlight">$1</span>');
-                content.innerHTML = highlightedText;
-            }
-        }
-
-        function removeHighlights(element) {
-            const highlights = element.querySelectorAll('.highlight');
-            highlights.forEach(highlight => {
-                const parent = highlight.parentNode;
-                parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
-                parent.normalize();
-            });
-        }
-
-        // Initialize when page loads
-        initializeConversation();
     </script>
 </body>
 </html>`;
     }
 
-    private formatMessage(message: ConversationMessage): any {
-        return {
-            uuid: message.uuid,
-            timestamp: message.timestamp,
-            role: message.type,
-            content: message.message.content,
-            requestId: message.requestId,
-            toolUseResult: message.toolUseResult,
-            isMeta: message.isMeta
-        };
+    private extractDetailedContent(content: any): string {
+        if (typeof content === 'string') {
+            return content;
+        } else if (Array.isArray(content)) {
+            return content.map(item => {
+                if (item.type === 'text') {
+                    return item.text || '';
+                } else if (item.type === 'tool_use') {
+                    const toolName = item.name || 'Unknown Tool';
+                    const toolInput = item.input ? JSON.stringify(item.input, null, 2) : '';
+                    return `[Tool: ${toolName}]\n${toolInput ? `Input: ${toolInput}` : ''}`;
+                } else if (item.type === 'tool_result') {
+                    const resultContent = item.content || 'No result content';
+                    return `[Tool Result]\n${resultContent}`;
+                }
+                return '';
+            }).join('\n\n');
+        }
+        return '';
+    }
+
+    private extractTextContent(content: any): string {
+        if (typeof content === 'string') {
+            return content;
+        } else if (Array.isArray(content)) {
+            return content.map(item => {
+                if (item.type === 'text') {
+                    return item.text || '';
+                } else if (item.type === 'tool_use') {
+                    return `[Tool: ${item.name}]`;
+                } else if (item.type === 'tool_result') {
+                    return '[Tool Result]';
+                }
+                return '';
+            }).join(' ');
+        }
+        return '';
+    }
+
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     private async handleWebviewMessage(message: any, conversation: ConversationSession): Promise<void> {
@@ -439,17 +346,9 @@ export class ConversationViewer {
             
             markdown += `## ${role} - ${timestamp}\n\n`;
             
-            if (typeof message.message.content === 'string') {
-                markdown += `${message.message.content}\n\n`;
-            } else if (Array.isArray(message.message.content)) {
-                message.message.content.forEach(item => {
-                    if (item.type === 'text') {
-                        markdown += `${item.text}\n\n`;
-                    } else if (item.type === 'tool_use') {
-                        markdown += `### Tool Use: ${item.name}\n\n`;
-                        markdown += `\`\`\`json\n${JSON.stringify(item.input, null, 2)}\n\`\`\`\n\n`;
-                    }
-                });
+            const content = this.extractTextContent(message.message.content);
+            if (content.trim()) {
+                markdown += `${content}\n\n`;
             }
             
             markdown += '---\n\n';
@@ -468,21 +367,14 @@ export class ConversationViewer {
         text += '='.repeat(50) + '\n\n';
 
         conversation.messages.forEach((message, index) => {
-            const role = message.type === 'user' ? 'USER' : 'ASSISTANT';
+            const role = message.type === 'user' ? 'USER' : 'CLAUDE';
             const timestamp = new Date(message.timestamp).toLocaleString();
             
             text += `[${role}] ${timestamp}\n`;
             
-            if (typeof message.message.content === 'string') {
-                text += `${message.message.content}\n\n`;
-            } else if (Array.isArray(message.message.content)) {
-                message.message.content.forEach(item => {
-                    if (item.type === 'text') {
-                        text += `${item.text}\n\n`;
-                    } else if (item.type === 'tool_use') {
-                        text += `[TOOL: ${item.name}]\n${JSON.stringify(item.input, null, 2)}\n\n`;
-                    }
-                });
+            const content = this.extractTextContent(message.message.content);
+            if (content.trim()) {
+                text += `${content}\n\n`;
             }
             
             text += '-'.repeat(30) + '\n\n';
