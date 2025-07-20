@@ -302,6 +302,40 @@ export class ConversationViewer {
             // All sections start collapsed by default
             console.log('Conversation loaded with all sections collapsed');
         });
+        
+        function filterContent() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const requestHeaders = document.querySelectorAll('.request-header');
+            const requestContents = document.querySelectorAll('.request-content');
+            
+            requestHeaders.forEach((header, index) => {
+                const content = requestContents[index];
+                const headerText = header.textContent.toLowerCase();
+                const contentText = content.textContent.toLowerCase();
+                
+                const matches = headerText.includes(searchTerm) || contentText.includes(searchTerm);
+                
+                if (searchTerm === '' || matches) {
+                    header.style.display = 'flex';
+                    content.style.display = content.classList.contains('expanded') ? 'block' : 'none';
+                } else {
+                    header.style.display = 'none';
+                    content.style.display = 'none';
+                }
+            });
+            
+            // If searching, expand all matching sections
+            if (searchTerm !== '') {
+                requestHeaders.forEach((header, index) => {
+                    if (header.style.display !== 'none') {
+                        const content = requestContents[index];
+                        const icon = header.querySelector('.collapse-icon');
+                        content.classList.add('expanded');
+                        icon.classList.add('expanded');
+                    }
+                });
+            }
+        }
     </script>
 </body>
 </html>`;
@@ -338,23 +372,6 @@ export class ConversationViewer {
         return 'Unknown content format';
     }
 
-    private extractTextContent(content: any): string {
-        if (typeof content === 'string') {
-            return content;
-        } else if (Array.isArray(content)) {
-            return content.map(item => {
-                if (item.type === 'text') {
-                    return item.text || '';
-                } else if (item.type === 'tool_use') {
-                    return `[Tool: ${item.name}]`;
-                } else if (item.type === 'tool_result') {
-                    return '[Tool Result]';
-                }
-                return '';
-            }).join(' ');
-        }
-        return '';
-    }
 
 
     private generateGroupedConversationHTML(messages: ConversationMessage[]): string {
@@ -529,7 +546,7 @@ export class ConversationViewer {
         markdown += `**Ended:** ${conversation.endTime ? new Date(conversation.endTime).toLocaleString() : 'Ongoing'}\n`;
         markdown += `**Messages:** ${conversation.messageCount}\n\n`;
 
-        conversation.messages.forEach((message, index) => {
+        conversation.messages.forEach((message) => {
             const date = new Date(message.timestamp);
             const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
             const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
@@ -563,7 +580,7 @@ export class ConversationViewer {
         text += `Messages: ${conversation.messageCount}\n\n`;
         text += '='.repeat(50) + '\n\n';
 
-        conversation.messages.forEach((message, index) => {
+        conversation.messages.forEach((message) => {
             const date = new Date(message.timestamp);
             const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
             const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
