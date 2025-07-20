@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs-extra';
+import * as os from 'os';
 import { ConversationManager } from './ConversationManager';
 import { ConversationSummary, ConversationSession, ConversationMessage } from './types';
 
@@ -26,12 +28,12 @@ export class ConversationViewer {
             }
 
             this.panel = vscode.window.createWebviewPanel(
-                'conversationViewer',
+                'conversationViewer-' + Date.now(),
                 `💬 ${conversationSummary.projectName}`,
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    retainContextWhenHidden: true
+                    retainContextWhenHidden: false
                 }
             );
 
@@ -58,18 +60,19 @@ export class ConversationViewer {
     }
 
     private getWebviewContent(conversationSummary: ConversationSummary, conversation: ConversationSession): string {
-        // Extract simple conversation text with timestamps and tool details
-        let conversationText = '';
+        // Extract metadata from any available message
+        const metadata = this.extractConversationMetadata(conversation.messages);
         
-        conversation.messages.forEach(message => {
-            const role = message.type === 'user' ? 'User' : 'Claude';
-            const timestamp = new Date(message.timestamp).toLocaleString();
-            const content = this.extractDetailedContent(message.message.content);
-            
-            if (content.trim()) {
-                conversationText += `${role} (${timestamp}):\n${content}\n\n---\n\n`;
-            }
-        });
+        // Also extract from conversation session
+        const sessionMetadata = {
+            version: metadata.version,
+            gitBranch: metadata.gitBranch,
+            serviceTier: metadata.serviceTier,
+            cwd: metadata.cwd || conversation.projectPath || 'Unknown'
+        };
+
+        // Group messages by request ID for collapsible display
+        const conversationHTML = this.generateGroupedConversationHTML(conversation.messages);
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -133,13 +136,12 @@ export class ConversationViewer {
         }
         .conversation {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
-            padding: 20px;
+            padding: 15px;
             border-radius: 8px;
             border: 1px solid var(--vscode-panel-border);
-            white-space: pre-wrap;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 14px;
-            line-height: 1.7;
+            font-family: var(--vscode-editor-font-family), 'Consolas', 'Courier New', monospace;
+            font-size: var(--vscode-editor-font-size, 12px);
+            line-height: 1.3;
         }
         .export-buttons {
             position: fixed;
@@ -152,15 +154,65 @@ export class ConversationViewer {
         .export-btn {
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
-            border: none;
+            border: 1px solid var(--vscode-button-border);
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
             font-weight: 500;
+            transition: all 0.2s ease;
         }
         .export-btn:hover {
             background-color: var(--vscode-button-hoverBackground);
+            transform: translateY(-1px);
+        }
+        .export-btn:active {
+            transform: translateY(0);
+            background-color: var(--vscode-button-background);
+        }
+        .request-header {
+            background-color: var(--vscode-editor-selectionBackground);
+            padding: 0;
+            margin: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            user-select: text;
+            border: none;
+        }
+        .request-header:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .request-content {
+            display: none !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .request-content.expanded {
+            display: block !important;
+            height: auto !important;
+            padding: 10px !important;
+        }
+        .message-content {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: var(--vscode-textCodeBlock-background);
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family), monospace;
+            font-size: 12px;
+            line-height: 1.3;
+            white-space: pre-wrap;
+        }
+        .collapse-icon {
+            margin-right: 8px;
+            transition: transform 0.2s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+        .collapse-icon.expanded {
+            transform: rotate(90deg);
         }
     </style>
 </head>
@@ -198,6 +250,22 @@ export class ConversationViewer {
                 <span class="metadata-label">Messages:</span>
                 <span class="metadata-value">${conversationSummary.messageCount || 0}</span>
             </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Claude Code Version:</span>
+                <span class="metadata-value">${sessionMetadata.version}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Git Branch:</span>
+                <span class="metadata-value">${sessionMetadata.gitBranch}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Service Tier:</span>
+                <span class="metadata-value">${sessionMetadata.serviceTier}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Working Directory:</span>
+                <span class="metadata-value">${sessionMetadata.cwd}</span>
+            </div>
         </div>
     </div>
 
@@ -205,25 +273,20 @@ export class ConversationViewer {
         <input type="text" id="searchInput" placeholder="🔍 Search conversation..." oninput="filterContent()">
     </div>
 
-    <div class="conversation" id="conversationContent">${this.escapeHtml(conversationText)}</div>
+    <div class="conversation" id="conversationContent">${conversationHTML}</div>
 
     <script>
-        function filterContent() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const content = document.getElementById('conversationContent');
-            const originalText = ${JSON.stringify(conversationText)};
+        function toggleRequest(requestId) {
+            const content = document.getElementById('content-' + requestId);
+            const icon = document.getElementById('icon-' + requestId);
             
-            if (searchTerm === '') {
-                content.innerHTML = originalText;
-                return;
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                icon.classList.remove('expanded');
+            } else {
+                content.classList.add('expanded');
+                icon.classList.add('expanded');
             }
-            
-            const lines = originalText.split('\\n');
-            const filteredLines = lines.filter(line => 
-                line.toLowerCase().includes(searchTerm)
-            );
-            
-            content.innerHTML = filteredLines.join('\\n');
         }
         
         function exportConversation(format) {
@@ -233,30 +296,46 @@ export class ConversationViewer {
                 format: format
             });
         }
+        
+        // Initialize all requests as collapsed
+        window.addEventListener('load', function() {
+            // All sections start collapsed by default
+            console.log('Conversation loaded with all sections collapsed');
+        });
     </script>
 </body>
 </html>`;
     }
 
     private extractDetailedContent(content: any): string {
+        // Handle missing or null content
+        if (!content) {
+            return 'No content available';
+        }
+        
         if (typeof content === 'string') {
-            return content;
+            return content.trim();
         } else if (Array.isArray(content)) {
-            return content.map(item => {
+            const parts = content.map(item => {
+                if (!item || !item.type) {
+                    return '';
+                }
                 if (item.type === 'text') {
-                    return item.text || '';
+                    return item.text ? item.text.trim() : '';
                 } else if (item.type === 'tool_use') {
                     const toolName = item.name || 'Unknown Tool';
                     const toolInput = item.input ? JSON.stringify(item.input, null, 2) : '';
-                    return `[Tool: ${toolName}]\n${toolInput ? `Input: ${toolInput}` : ''}`;
+                    return `[Tool: ${toolName}]${toolInput ? `\nInput: ${toolInput}` : ''}`;
                 } else if (item.type === 'tool_result') {
                     const resultContent = item.content || 'No result content';
                     return `[Tool Result]\n${resultContent}`;
                 }
                 return '';
-            }).join('\n\n');
+            }).filter(part => part.trim() !== '');
+            
+            return parts.join('\n\n');
         }
-        return '';
+        return 'Unknown content format';
     }
 
     private extractTextContent(content: any): string {
@@ -275,6 +354,102 @@ export class ConversationViewer {
             }).join(' ');
         }
         return '';
+    }
+
+
+    private generateGroupedConversationHTML(messages: ConversationMessage[]): string {
+        const requestGroups: { [requestId: string]: ConversationMessage[] } = {};
+        
+        // Group messages by request ID
+        messages.forEach(message => {
+            const requestId = message.requestId || `solo-${message.uuid}`;
+            if (!requestGroups[requestId]) {
+                requestGroups[requestId] = [];
+            }
+            requestGroups[requestId].push(message);
+        });
+        
+        let html = '';
+        Object.entries(requestGroups).forEach(([requestId, groupMessages]) => {
+            const firstMessage = groupMessages[0];
+            const isInternalMessage = firstMessage.isMeta || firstMessage.uuid?.includes('system') || false;
+            let role = firstMessage.type === 'user' ? 'User Prompt' : 'Claude Response';
+            if (isInternalMessage) {
+                role = firstMessage.type === 'user' ? 'System Prompt' : 'Claude Internal';
+            }
+            
+            const date = new Date(firstMessage.timestamp);
+            const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+            const timestamp = `${timeStr}:${dateStr}`;
+            
+            const messageMetadata = [];
+            if (firstMessage.message?.model) messageMetadata.push(`Model: ${firstMessage.message.model}`);
+            if (firstMessage.userType) messageMetadata.push(`UserType: ${firstMessage.userType}`);
+            
+            const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
+            
+            html += `<div class="request-header" onclick="toggleRequest('${requestId}')">
+                <span class="collapse-icon" id="icon-${requestId}">▶</span>
+                <span>${timestamp} - ${role}${metadataStr}</span>
+            </div>
+            <div class="request-content" id="content-${requestId}">`;
+            
+            groupMessages.forEach(message => {
+                const content = this.extractDetailedContent(message.message?.content);
+                if (content.trim()) {
+                    // Clean up content: remove excessive whitespace and blank lines
+                    const cleanedContent = content
+                        .split('\n')
+                        .map(line => line.trim())
+                        .filter(line => line.length > 0)
+                        .join('\n');
+                    
+                    if (cleanedContent) {
+                        html += `<div class="message-content">${this.escapeHtml(cleanedContent)}</div>`;
+                    }
+                }
+            });
+            
+            html += `</div>`;
+        });
+        
+        return html;
+    }
+
+    private extractConversationMetadata(messages: ConversationMessage[]): any {
+        const metadata = {
+            version: 'Unknown',
+            gitBranch: 'Unknown', 
+            serviceTier: 'Unknown',
+            cwd: 'Unknown'
+        };
+
+        // Search through all messages for metadata
+        for (const message of messages) {
+            if (message.version && metadata.version === 'Unknown') {
+                metadata.version = message.version;
+            }
+            if (message.gitBranch && metadata.gitBranch === 'Unknown') {
+                metadata.gitBranch = message.gitBranch;
+            }
+            if (message.cwd && metadata.cwd === 'Unknown') {
+                metadata.cwd = message.cwd;
+            }
+            if (message.message?.usage?.service_tier && metadata.serviceTier === 'Unknown') {
+                metadata.serviceTier = message.message.usage.service_tier;
+            }
+            
+            // Stop early if we found everything
+            if (metadata.version !== 'Unknown' && 
+                metadata.gitBranch !== 'Unknown' && 
+                metadata.serviceTier !== 'Unknown' && 
+                metadata.cwd !== 'Unknown') {
+                break;
+            }
+        }
+
+        return metadata;
     }
 
     private escapeHtml(text: string): string {
@@ -300,8 +475,22 @@ export class ConversationViewer {
 
     private async exportConversation(conversation: ConversationSession, format: string): Promise<void> {
         try {
+            // Create .claude/.chats directory in workspace if it doesn't exist
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            let defaultPath: string;
+            
+            if (workspaceFolder) {
+                const claudeDir = path.join(workspaceFolder.uri.fsPath, '.claude');
+                const chatsDir = path.join(claudeDir, '.chats');
+                await fs.ensureDir(chatsDir);
+                defaultPath = path.join(chatsDir, `conversation-${conversation.sessionId}.${format}`);
+            } else {
+                // Fallback to current directory if no workspace
+                defaultPath = `conversation-${conversation.sessionId}.${format}`;
+            }
+            
             const saveUri = await vscode.window.showSaveDialog({
-                defaultUri: vscode.Uri.file(`conversation-${conversation.sessionId}.${format}`),
+                defaultUri: vscode.Uri.file(defaultPath),
                 filters: {
                     'Markdown': ['md'],
                     'JSON': ['json'],
@@ -341,14 +530,22 @@ export class ConversationViewer {
         markdown += `**Messages:** ${conversation.messageCount}\n\n`;
 
         conversation.messages.forEach((message, index) => {
-            const role = message.type === 'user' ? 'User' : 'Assistant';
-            const timestamp = new Date(message.timestamp).toLocaleString();
+            const date = new Date(message.timestamp);
+            const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+            const timestamp = `${timeStr}:${dateStr}`;
             
-            markdown += `## ${role} - ${timestamp}\n\n`;
+            const role = message.type === 'user' ? 'User Prompt' : 'Claude Response';
+            const messageMetadata = [];
+            if (message.message?.model) messageMetadata.push(`Model: ${message.message.model}`);
+            if (message.userType) messageMetadata.push(`UserType: ${message.userType}`);
+            const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
             
-            const content = this.extractTextContent(message.message.content);
+            markdown += `## ${timestamp} - ${role}${metadataStr}\n\n`;
+            
+            const content = this.extractDetailedContent(message.message.content);
             if (content.trim()) {
-                markdown += `${content}\n\n`;
+                markdown += `\`\`\`\n${content}\n\`\`\`\n\n`;
             }
             
             markdown += '---\n\n';
@@ -367,12 +564,20 @@ export class ConversationViewer {
         text += '='.repeat(50) + '\n\n';
 
         conversation.messages.forEach((message, index) => {
-            const role = message.type === 'user' ? 'USER' : 'CLAUDE';
-            const timestamp = new Date(message.timestamp).toLocaleString();
+            const date = new Date(message.timestamp);
+            const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+            const timestamp = `${timeStr}:${dateStr}`;
             
-            text += `[${role}] ${timestamp}\n`;
+            const role = message.type === 'user' ? 'User Prompt' : 'Claude Response';
+            const messageMetadata = [];
+            if (message.message?.model) messageMetadata.push(`Model: ${message.message.model}`);
+            if (message.userType) messageMetadata.push(`UserType: ${message.userType}`);
+            const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
             
-            const content = this.extractTextContent(message.message.content);
+            text += `${timestamp} - ${role}${metadataStr}\n`;
+            
+            const content = this.extractDetailedContent(message.message.content);
             if (content.trim()) {
                 text += `${content}\n\n`;
             }

@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+import * as os from 'os';
 import { RepositoryManager } from './repository';
 import { ClaudeFileManager } from './fileManager';
 import { ClaudeTreeDataProvider } from './claudeTreeProvider';
@@ -7,7 +10,7 @@ import { ConversationTreeProvider } from './conversation/ConversationTreeProvide
 import { ConversationViewer } from './conversation/ConversationViewer';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
-import { openConversationsCommand, viewConversationCommand, exportConversationCommand } from './commands/openConversations';
+import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
 
 let repositoryManager: RepositoryManager;
 let fileManager: ClaudeFileManager;
@@ -16,8 +19,44 @@ let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
 let statusBarItem: vscode.StatusBarItem;
 
+async function ensureClaudeDirectoryStructure() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        console.warn('No workspace folder available for Claude directory structure');
+        return;
+    }
+    
+    const claudeDir = path.join(workspaceFolder.uri.fsPath, '.claude');
+    const chatsDir = path.join(claudeDir, '.chats');
+    const plansDir = path.join(claudeDir, '.plans');
+    
+    try {
+        // Check if .claude already exists in workspace
+        const claudeExists = await fs.pathExists(claudeDir);
+        
+        // Safely create the subdirectories we need
+        await fs.ensureDir(chatsDir);
+        await fs.ensureDir(plansDir);
+        
+        console.log(`Claude workspace directory structure ensured:`, {
+            claudeDir: claudeExists ? 'already existed' : 'created',
+            chatsDir: 'ensured',
+            plansDir: 'ensured',
+            workspacePath: workspaceFolder.uri.fsPath
+        });
+    } catch (error) {
+        console.warn('Failed to ensure Claude workspace directory structure:', error);
+        // Don't throw - extension should still work even if directory creation fails
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('Claude Config Manager is now active!');
+
+    // Ensure .claude directory structure exists
+    ensureClaudeDirectoryStructure().catch(err => {
+        console.error('Failed to create Claude directory structure:', err);
+    });
 
     // Initialize managers
     repositoryManager = new RepositoryManager(context);
@@ -52,7 +91,8 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('claude-config.openConversations', () => openConversationsCommand(conversationManager, conversationViewer)),
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),
         vscode.commands.registerCommand('claude-config.viewConversation', (conversationSummary) => viewConversationCommand(conversationViewer, conversationSummary)),
-        vscode.commands.registerCommand('claude-config.exportConversation', (conversationSummary) => exportConversationCommand(conversationManager, conversationSummary))
+        vscode.commands.registerCommand('claude-config.exportConversation', (conversationSummary) => exportConversationCommand(conversationManager, conversationSummary)),
+        vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager))
     ];
 
     commands.forEach(command => context.subscriptions.push(command));

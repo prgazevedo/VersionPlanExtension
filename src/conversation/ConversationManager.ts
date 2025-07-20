@@ -7,10 +7,26 @@ import { sanitizePath } from '../security';
 
 export class ConversationManager {
     private claudeDataPath: string;
+    private fileWatcher: vscode.FileSystemWatcher | undefined;
+    private onConversationsChangedEmitter = new vscode.EventEmitter<void>();
+    public onConversationsChanged = this.onConversationsChangedEmitter.event;
 
     constructor(private context: vscode.ExtensionContext) {
         // Default Claude data path - can be overridden by configuration
         this.claudeDataPath = this.getDefaultClaudeDataPath();
+        this.setupFileWatcher();
+    }
+
+    private setupFileWatcher() {
+        // Watch for changes in the Claude conversations directory
+        const watchPattern = path.join(this.claudeDataPath, '**', '*.jsonl');
+        this.fileWatcher = vscode.workspace.createFileSystemWatcher(watchPattern);
+        
+        this.fileWatcher.onDidCreate(() => this.onConversationsChangedEmitter.fire());
+        this.fileWatcher.onDidChange(() => this.onConversationsChangedEmitter.fire());
+        this.fileWatcher.onDidDelete(() => this.onConversationsChangedEmitter.fire());
+        
+        this.context.subscriptions.push(this.fileWatcher);
     }
 
     private getDefaultClaudeDataPath(): string {
@@ -30,10 +46,12 @@ export class ConversationManager {
             const conversations: ConversationSummary[] = [];
             
             if (!await fs.pathExists(this.claudeDataPath)) {
+                console.log('Claude data path does not exist:', this.claudeDataPath);
                 return conversations;
             }
 
             const projectDirs = await fs.readdir(this.claudeDataPath);
+            console.log('Found project directories:', projectDirs);
             
             for (const projectDir of projectDirs) {
                 const projectPath = path.join(this.claudeDataPath, projectDir);
@@ -41,13 +59,18 @@ export class ConversationManager {
                 
                 if (stat.isDirectory()) {
                     const sessionFiles = await fs.readdir(projectPath);
+                    console.log(`Project ${projectDir} has files:`, sessionFiles);
                     
                     for (const sessionFile of sessionFiles) {
                         if (sessionFile.endsWith('.jsonl')) {
                             const sessionPath = path.join(projectPath, sessionFile);
+                            console.log(`Processing conversation file: ${sessionPath}`);
                             const summary = await this.getConversationSummary(sessionPath, projectDir);
                             if (summary) {
                                 conversations.push(summary);
+                                console.log(`Added conversation: ${summary.projectName} - ${summary.messageCount} messages`);
+                            } else {
+                                console.log(`Failed to parse conversation: ${sessionPath}`);
                             }
                         }
                     }
@@ -56,6 +79,9 @@ export class ConversationManager {
 
             // Sort by start time, newest first
             conversations.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+            
+            console.log(`Total conversations loaded: ${conversations.length}`);
+            console.log('Conversation summaries:', conversations.map(c => `${c.projectName} (${c.messageCount} msgs)`));
             
             return conversations;
         } catch (error) {
@@ -78,12 +104,60 @@ export class ConversationManager {
                 return null;
             }
 
-            const firstMessage = JSON.parse(lines[0]) as ConversationMessage;
-            const lastMessage = lines.length > 1 ? JSON.parse(lines[lines.length - 1]) as ConversationMessage : firstMessage;
+            let firstMessage: ConversationMessage;
+            let lastMessage: ConversationMessage;
             
-            const startTime = firstMessage.timestamp;
-            const endTime = lastMessage.timestamp;
+            try {
+                firstMessage = JSON.parse(lines[0]) as ConversationMessage;
+                lastMessage = lines.length > 1 ? JSON.parse(lines[lines.length - 1]) as ConversationMessage : firstMessage;
+            } catch (parseError) {
+                console.error(`Failed to parse message JSON in ${filePath}:`, parseError);
+                return null;
+            }
+            
+            // Find chronological start and end times  
+            const allMessages = [];
+            for (const line of lines) {
+                try {
+                    const msg = JSON.parse(line);
+                    if (msg.timestamp && !isNaN(new Date(msg.timestamp).getTime())) {
+                        allMessages.push(msg);
+                    }
+                } catch (e) {
+                    // Skip invalid messages
+                }
+            }
+            
+            let startTime: string;
+            let endTime: string;
+            
+            if (allMessages.length > 0) {
+                const sortedByTime = allMessages.sort((a, b) => 
+                    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
+                startTime = sortedByTime[0].timestamp;
+                endTime = sortedByTime[sortedByTime.length - 1].timestamp;
+                
+                // Ensure end >= start
+                if (new Date(endTime) < new Date(startTime)) {
+                    endTime = startTime;
+                }
+            } else {
+                // Fallback
+                startTime = firstMessage.timestamp || new Date().toISOString();
+                endTime = startTime;
+            }
+            
             const duration = this.calculateDuration(startTime, endTime);
+            
+            console.log(`Conversation ${sessionId}:`, {
+                file: path.basename(filePath),
+                startTime,
+                endTime,
+                duration,
+                messageCount: lines.length,
+                validTimestamps: allMessages.length
+            });
             
             return {
                 sessionId,
@@ -111,6 +185,11 @@ export class ConversationManager {
     }
 
     private extractMessageText(message: ConversationMessage): string {
+        // Handle missing or invalid message structure
+        if (!message || !message.message || !message.message.content) {
+            return 'No content available';
+        }
+
         if (typeof message.message.content === 'string') {
             return message.message.content.substring(0, 100) + (message.message.content.length > 100 ? '...' : '');
         } else if (Array.isArray(message.message.content) && message.message.content.length > 0) {
@@ -164,11 +243,44 @@ export class ConversationManager {
             const firstMessage = messages[0];
             const lastMessage = messages[messages.length - 1];
 
+            // Extract session ID from filename
+            const sessionId = path.basename(filePath, '.jsonl');
+            
+            // Find actual start and end times (chronologically)
+            const validMessages = messages.filter(m => m.timestamp && !isNaN(new Date(m.timestamp).getTime()));
+            
+            if (validMessages.length === 0) {
+                // Fallback if no valid timestamps
+                const now = new Date().toISOString();
+                return {
+                    sessionId,
+                    projectPath: firstMessage.cwd || '',
+                    startTime: now,
+                    endTime: now,
+                    messageCount: messages.length,
+                    filePath: filePath,
+                    messages
+                };
+            }
+            
+            const sortedMessages = [...validMessages].sort((a, b) => 
+                new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            );
+            
+            const startTime = sortedMessages[0].timestamp;
+            const endTime = sortedMessages[sortedMessages.length - 1].timestamp;
+            
+            // Ensure end time is not before start time (for ongoing conversations)
+            const startDate = new Date(startTime);
+            const endDate = new Date(endTime);
+            
+            const finalEndTime = endDate >= startDate ? endTime : startTime;
+
             return {
-                sessionId: firstMessage.sessionId,
+                sessionId,
                 projectPath: firstMessage.cwd || '',
-                startTime: firstMessage.timestamp,
-                endTime: lastMessage.timestamp,
+                startTime,
+                endTime: finalEndTime,
                 messageCount: messages.length,
                 filePath: filePath,
                 messages

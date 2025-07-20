@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 import { ConversationViewer } from '../conversation/ConversationViewer';
 import { ConversationManager } from '../conversation/ConversationManager';
-import { ConversationSummary } from '../conversation/types';
+import { ConversationSummary, ConversationSession } from '../conversation/types';
 
 export async function openConversationsCommand(
     conversationManager: ConversationManager,
@@ -185,4 +187,60 @@ function formatAsText(conversation: any): string {
     });
 
     return text;
+}
+
+export async function exportAllConversationsCommand(
+    conversationManager: ConversationManager
+): Promise<void> {
+    try {
+        // Get all conversations
+        const conversations = await conversationManager.getAvailableConversations();
+        
+        if (conversations.length === 0) {
+            vscode.window.showInformationMessage('No conversations found to export.');
+            return;
+        }
+
+        // Create workspace .claude/.chats directory
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('No workspace folder available.');
+            return;
+        }
+
+        const claudeDir = path.join(workspaceFolder.uri.fsPath, '.claude');
+        const chatsDir = path.join(claudeDir, '.chats');
+        await fs.ensureDir(chatsDir);
+
+        // Export each conversation
+        let exportCount = 0;
+        const errors: string[] = [];
+
+        for (const conversationSummary of conversations) {
+            try {
+                const conversation = await conversationManager.loadConversation(conversationSummary.filePath);
+                if (conversation) {
+                    const filename = `conversation-${conversation.sessionId}.md`;
+                    const filePath = path.join(chatsDir, filename);
+                    const content = formatAsMarkdown(conversation);
+                    
+                    await fs.writeFile(filePath, content, 'utf8');
+                    exportCount++;
+                }
+            } catch (error) {
+                errors.push(`Failed to export conversation ${conversationSummary.projectName}: ${error}`);
+            }
+        }
+
+        if (errors.length > 0) {
+            vscode.window.showWarningMessage(`Exported ${exportCount} conversations with ${errors.length} errors. Check output for details.`);
+            console.error('Export errors:', errors);
+        } else {
+            vscode.window.showInformationMessage(`Successfully exported ${exportCount} conversations to .claude/.chats/`);
+        }
+        
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to export conversations: ${error}`);
+        console.error('Export all conversations error:', error);
+    }
 }

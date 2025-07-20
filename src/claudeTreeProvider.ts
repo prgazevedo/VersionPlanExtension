@@ -23,7 +23,9 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
 
         const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
         const claudeFilePath = path.join(workspacePath, 'CLAUDE.md');
+        const planFilePath = path.join(workspacePath, '.claude', '.plans', 'PROJECT_PLAN.md');
         const claudeFileExists = await fs.pathExists(claudeFilePath);
+        const planFileExists = await fs.pathExists(planFilePath);
 
         const items: ClaudeTreeItem[] = [];
 
@@ -39,20 +41,45 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             claudeFileExists ? 'file' : 'file-missing'
         ));
 
-        // Actions section
-        if (claudeFileExists) {
+        // Project plan section
+        if (planFileExists) {
             items.push(new ClaudeTreeItem(
-                'Sync to Git',
+                'PROJECT_PLAN.md ✓',
+                vscode.TreeItemCollapsibleState.None,
+                {
+                    command: 'vscode.open',
+                    title: 'Open Project Plan',
+                    arguments: [vscode.Uri.file(planFilePath)]
+                },
+                'book'
+            ));
+        }
+
+        // Actions section - sync project plan if it exists
+        if (planFileExists) {
+            items.push(new ClaudeTreeItem(
+                'Sync Project Plan to Git',
                 vscode.TreeItemCollapsibleState.None,
                 {
                     command: 'claude-config.sync',
-                    title: 'Sync to Git',
+                    title: 'Sync Project Plan to Git',
                     arguments: []
                 },
                 'sync'
             ));
         }
 
+        // Export all conversations action
+        items.push(new ClaudeTreeItem(
+            'Export All Conversations',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.exportAllConversations',
+                title: 'Export All Conversations',
+                arguments: []
+            },
+            'export'
+        ));
 
         return items;
     }

@@ -83,5 +83,13 @@ jspm_packages/
 # DynamoDB Local files
 .dynamodb/
 
-# Plans directory (optional - developers can choose to commit)
-.plans/
+# Claude Code - Official Configuration
+.claude/settings.local.json  # Local settings (auto-ignored by Claude Code)
+
+# Claude Config Manager Extension - Local files  
+.claude/.chats/          # Exported conversations (large, personal data)
+
+# Team-sharable Claude Code files (should be tracked):
+# .claude/settings.json   # Team settings (official Claude Code)
+# .claude/commands/       # Team slash commands (official Claude Code)
+# .claude/.plans/         # Project documentation (extension-specific)

@@ -10,6 +10,11 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
 
     constructor(private conversationManager: ConversationManager) {
         this.refresh();
+        
+        // Listen for conversation changes and auto-refresh
+        this.conversationManager.onConversationsChanged(() => {
+            this.refresh();
+        });
     }
 
     refresh(): void {
@@ -40,7 +45,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
                 return new ConversationItem(
                     projectName,
                     `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`,
-                    vscode.TreeItemCollapsibleState.Expanded,
+                    vscode.TreeItemCollapsibleState.Collapsed,
                     'project',
                     undefined,
                     conversations
@@ -80,6 +85,12 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
 
     private formatConversationLabel(conversation: ConversationSummary): string {
         const date = new Date(conversation.startTime);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            return `Invalid Date (${conversation.duration || '0m'})`;
+        }
+        
         const formattedDate = date.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',

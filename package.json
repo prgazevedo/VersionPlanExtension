@@ -42,7 +42,7 @@
     "commands": [
       {
         "command": "claude-config.sync",
-        "title": "Sync to Git",
+        "title": "Sync Claude Configuration to Git",
         "category": "Claude Config",
         "icon": "$(sync)"
       },
@@ -75,6 +75,12 @@
         "title": "Export Conversation",
         "category": "Claude Config",
         "icon": "$(export)"
+      },
+      {
+        "command": "claude-config.exportAllConversations",
+        "title": "Export All Conversations",
+        "category": "Claude Config",
+        "icon": "$(save-all)"
       }
     ],
     "viewsContainers": {
@@ -103,7 +109,7 @@
     "viewsWelcome": [
       {
         "view": "claude-config",
-        "contents": "Manage your CLAUDE.md configuration file.\n[Edit CLAUDE.md](command:claude-config.edit)\n[Sync to Git](command:claude-config.sync)",
+        "contents": "Manage your Claude configuration files.\n[Edit CLAUDE.md](command:claude-config.edit)\n[Sync to Git](command:claude-config.sync)",
         "when": "workspaceFolderCount > 0"
       },
       {
