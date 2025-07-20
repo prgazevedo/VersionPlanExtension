@@ -166,6 +166,30 @@ your-project/
 └── README.md
 ```
 
+## Privacy & Security
+
+### Privacy Statement
+This extension operates entirely locally and does not collect, transmit, or store any personal data or telemetry. All operations are performed on your local machine and your own Git repositories.
+
+**What the extension does:**
+- Reads and writes CLAUDE.md files in your workspace
+- Performs Git operations (add, commit, push) using your existing Git configuration
+- Creates files from templates using locally provided information
+
+**What the extension does NOT do:**
+- Collect usage statistics or telemetry
+- Send data to external servers (except standard Git operations to your configured repository)
+- Access files outside your workspace
+- Store credentials or personal information
+
+### Security Features
+- Input validation and sanitization to prevent path traversal attacks
+- Repository URL validation to prevent malicious Git operations
+- Secure file operations within workspace boundaries
+- Error message sanitization to prevent information disclosure
+
+For security issues, please report them privately via GitHub's security advisory feature.
+
 ## License
 
 MIT License

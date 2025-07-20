@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs-extra';
+import { sanitizeTemplateVariable, sanitizeProjectName } from './security';
 
 export interface TemplateVariables {
     projectName: string;
@@ -47,15 +48,17 @@ export class TemplateManager {
 
     async processTemplate(templateName: string, variables: TemplateVariables): Promise<string> {
         try {
-            const templatePath = path.join(this.templatesPath, `${templateName}.md`);
+            // Sanitize template name to prevent path traversal
+            const sanitizedTemplateName = sanitizeProjectName(templateName);
+            const templatePath = path.join(this.templatesPath, `${sanitizedTemplateName}.md`);
             let content = await fs.readFile(templatePath, 'utf8');
 
-            // Replace variables in template
-            content = content.replace(/\{\{projectName\}\}/g, variables.projectName);
-            content = content.replace(/\{\{description\}\}/g, variables.description);
-            content = content.replace(/\{\{techStack\}\}/g, variables.techStack);
-            content = content.replace(/\{\{author\}\}/g, variables.author);
-            content = content.replace(/\{\{date\}\}/g, variables.date);
+            // Sanitize and replace variables in template
+            content = content.replace(/\{\{projectName\}\}/g, sanitizeTemplateVariable(variables.projectName));
+            content = content.replace(/\{\{description\}\}/g, sanitizeTemplateVariable(variables.description));
+            content = content.replace(/\{\{techStack\}\}/g, sanitizeTemplateVariable(variables.techStack));
+            content = content.replace(/\{\{author\}\}/g, sanitizeTemplateVariable(variables.author));
+            content = content.replace(/\{\{date\}\}/g, sanitizeTemplateVariable(variables.date));
 
             return content;
         } catch (error) {

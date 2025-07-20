@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 import { simpleGit, SimpleGit } from 'simple-git';
 import { updateStatusBar } from './extension';
+import { validateRepoUrl, sanitizeProjectName, validatePath, sanitizeErrorMessage } from './security';
 
 export class RepositoryManager {
     private git: SimpleGit | undefined;
@@ -24,6 +25,11 @@ export class RepositoryManager {
 
     async initializeRepo(repoUrl: string): Promise<boolean> {
         try {
+            // Validate repository URL for security
+            if (!validateRepoUrl(repoUrl)) {
+                throw new Error('Invalid or unsafe repository URL. Please use a valid HTTPS, Git, or SSH URL from a trusted source.');
+            }
+
             updateStatusBar('Initializing repository...', false);
             
             // Ensure the parent directory exists
@@ -201,7 +207,15 @@ export class RepositoryManager {
     }
 
     async getProjectConfigPath(projectName: string): Promise<string> {
-        const projectDir = path.join(this.repoPath, projectName);
+        // Sanitize project name to prevent path traversal
+        const sanitizedName = sanitizeProjectName(projectName);
+        const projectDir = path.join(this.repoPath, sanitizedName);
+        
+        // Validate the resulting path is within the repository
+        if (!validatePath(projectDir, this.repoPath)) {
+            throw new Error('Invalid project path detected');
+        }
+        
         await fs.ensureDir(projectDir);
         const configPath = path.join(projectDir, 'CLAUDE.md');
         return configPath;

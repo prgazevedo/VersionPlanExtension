@@ -1,9 +1,9 @@
 {
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
-  "description": "Manage CLAUDE.MD files across projects with GitHub repository synchronization",
+  "description": "Manage CLAUDE.MD files for Claude Code with workspace Git integration and custom activity bar icon",
   "version": "2.0.0",
-  "publisher": "local-dev",
+  "publisher": "prgazevedo",
   "author": "Pedro Azevedo",
   "license": "MIT",
   "repository": {
