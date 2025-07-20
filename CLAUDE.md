@@ -143,3 +143,22 @@ The extension provides comprehensive conversation history management:
 - Path sanitization prevents directory traversal attacks
 - Input validation on all user-provided paths and Git URLs
 - Safe parsing of JSONL files with error handling
+- Conversation files (`.claude/.chats/`) are excluded from Git tracking to prevent accidental secret exposure
+- GitHub push protection integration to block commits containing sensitive data
+
+## Recent Updates (v3.1.0)
+
+### Conversation History Browser v3.1.0
+
+- **Enhanced Security**: Implemented robust security measures including path sanitization and secret detection
+- **Improved UI**: Rich conversation viewer with VSCode theme integration and real-time search
+- **Export Features**: Multiple export formats (Markdown, JSON, Plain Text) with metadata preservation
+- **Project Organization**: Conversations grouped by project with expandable tree structure
+- **Performance**: Optimized JSONL parsing and file watching for better responsiveness
+
+### Security Improvements
+
+- Added `.claude/.chats/` to .gitignore to prevent conversation data from being committed
+- Implemented GitHub push protection compliance
+- Enhanced input validation across all user-facing inputs
+- Secure file handling with proper error boundaries
