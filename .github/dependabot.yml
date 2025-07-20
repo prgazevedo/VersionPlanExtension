@@ -13,8 +13,30 @@ updates:
       - "prgazevedo"
     commit-message:
       prefix: "deps"
+      prefix-development: "deps-dev"
       include: "scope"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
+    # Group development dependencies
+    groups:
+      development-dependencies:
+        dependency-type: "development"
+        patterns:
+          - "@types/*"
+          - "typescript"
+          - "eslint*"
+          - "@typescript-eslint/*"
+      production-dependencies:
+        dependency-type: "production"
+        patterns:
+          - "fs-extra"
+          - "simple-git"
+    # Enable security updates
+    allow:
+      - dependency-type: "all"
+    # Ignore specific packages if needed
+    ignore:
+      - dependency-name: "node"
+        versions: ["< 16.0"]
     
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -30,3 +52,4 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+    open-pull-requests-limit: 5
