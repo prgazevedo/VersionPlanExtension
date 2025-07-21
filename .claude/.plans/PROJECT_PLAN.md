@@ -1,22 +1,25 @@
-# Claude Config Manager v3.1.0 - Project Plan
+# Claude Config Manager v3.2.0 - Project Plan
 
 ## Overview
-Complete transformation of Claude Config Manager from template-based CLAUDE.md management to comprehensive conversation history browser with Git integration.
+Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md configuration management, conversation history browsing, and intelligent PROJECT_PLAN integration with Git. Now ready for VSCode marketplace publication.
 
-## Current Status - MOSTLY COMPLETE ✅
+## Current Status - PRODUCTION READY ✅
 - ✅ **COMPLETED**: Core conversation history browser implementation
-- ✅ **COMPLETED**: Remove template functionality completely
-- ✅ **COMPLETED**: Fix conversation viewer with collapsible interface
-- ✅ **COMPLETED**: Clean conversation content formatting 
-- ✅ **COMPLETED**: Workspace-based .claude directory structure
-- ✅ **COMPLETED**: Export functionality to .claude/.chats folder
-- ✅ **COMPLETED**: Terse timestamp format and compact headers
-- ⏳ **PENDING**: Final documentation updates
+- ✅ **COMPLETED**: Enhanced UI with Expand/Collapse All controls
+- ✅ **COMPLETED**: Asymmetrical metadata layout optimization
+- ✅ **COMPLETED**: PROJECT_PLAN integration with auto-rule injection
+- ✅ **COMPLETED**: Complete template system removal and cleanup
+- ✅ **COMPLETED**: GitignoreManager utility for security compliance
+- ✅ **COMPLETED**: v3.2.0 release from main branch
+- ✅ **COMPLETED**: Documentation updates for marketplace readiness
 
 ## Key Features Implemented
 
-### Conversation History Browser
+### Conversation History Browser v3.2.0
 - **Rich webview interface** with collapsible request grouping
+- **Enhanced Controls**: Expand All and Collapse All buttons for conversation management
+- **Asymmetrical Metadata Layout**: Two-section design with compact short values and full-width long values
+- **Optimized Header**: Improved space utilization with better text overflow handling
 - **Terse format**: `23:54:07/19/25 - User Prompt [metadata]`
 - **Clean collapsed sections** with no spacing artifacts
 - **VSCode theme integration** with proper styling
@@ -102,19 +105,40 @@ code --install-extension claude-config-manager-*.vsix
 - ✅ No template functionality visible anywhere
 - ✅ Workspace .claude directory structure working
 
-## Remaining Tasks
+## VSCode Marketplace Publication
 
-### Documentation Updates
-- [ ] Update README.md with v3.1 features
-- [ ] Remove all template-related documentation
-- [ ] Add conversation browser usage guide
-- [ ] Document .claude directory structure
+### Publication Readiness ✅
+- ✅ **Extension Package**: `claude-config-manager-3.2.0.vsix` ready
+- ✅ **GitHub Release**: Published from main branch with proper assets
+- ✅ **Documentation**: README.md and CLAUDE.md fully updated
+- ✅ **Security Compliance**: All security features implemented
+- ✅ **Version Consistency**: All files updated to v3.2.0
+
+### Marketplace Submission Steps
+To publish to VSCode marketplace, you need to:
+
+1. **Create Publisher Account**:
+   - Visit https://marketplace.visualstudio.com/manage/publishers
+   - Create account with Microsoft/Azure credentials
+   - Set up publisher profile for "prgazevedo"
+
+2. **Generate Personal Access Token**:
+   - Go to https://dev.azure.com/[your-org]/_usersSettings/tokens
+   - Create token with "Marketplace (manage)" scope
+   - Configure vsce: `vsce login prgazevedo`
+
+3. **Publish Extension**:
+   ```bash
+   vsce publish
+   # or manual upload the .vsix file via web interface
+   ```
 
 ### Future Enhancements (Low Priority)
 - [ ] Conversation search across projects
 - [ ] Batch export functionality
 - [ ] Keyboard shortcuts for actions
 - [ ] Context menus in tree view
+- [ ] Marketplace analytics integration
 
 ## File Organization
 
@@ -129,7 +153,7 @@ code --install-extension claude-config-manager-*.vsix
 
 ---
 
-**Version**: 3.1.0  
-**Status**: Production Ready  
-**Last Updated**: Current Session  
-**Next Review**: When adding new features
+**Version**: 3.2.0  
+**Status**: Ready for VSCode Marketplace Publication  
+**Last Updated**: July 2025 - Release v3.2.0  
+**Next Review**: Post-marketplace publication feedback
