@@ -112,21 +112,6 @@ export function sanitizeErrorMessage(error: any): string {
         .substring(0, 200);                              // Limit length
 }
 
-/**
- * Sanitizes template variables to prevent injection
- */
-export function sanitizeTemplateVariable(value: string): string {
-    if (!value || typeof value !== 'string') {
-        return '';
-    }
-    
-    return value
-        .replace(/[<>&"']/g, '')          // Remove HTML/XML characters
-        .replace(/\{\{|\}\}/g, '')        // Remove template syntax
-        .replace(/\$\{[^}]*\}/g, '')      // Remove variable syntax
-        .substring(0, 100)                // Limit length
-        .trim();
-}
 
 /**
  * Sanitizes file paths to prevent path traversal attacks

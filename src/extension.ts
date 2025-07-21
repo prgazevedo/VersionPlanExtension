@@ -11,6 +11,7 @@ import { ConversationViewer } from './conversation/ConversationViewer';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
+import { GitignoreManager } from './utils/GitignoreManager';
 
 let repositoryManager: RepositoryManager;
 let fileManager: ClaudeFileManager;
@@ -50,13 +51,185 @@ async function ensureClaudeDirectoryStructure() {
     }
 }
 
-export function activate(context: vscode.ExtensionContext) {
+async function ensureGitignoreRules() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return;
+    }
+
+    try {
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const wasUpdated = await GitignoreManager.ensureGitignoreRules(workspacePath);
+        
+        if (wasUpdated) {
+            const message = 'Added Claude security rules to .gitignore to prevent private conversation data from being committed to Git.';
+            vscode.window.showInformationMessage(message, 'View .gitignore').then(selection => {
+                if (selection === 'View .gitignore') {
+                    const gitignorePath = path.join(workspacePath, '.gitignore');
+                    vscode.workspace.openTextDocument(gitignorePath).then(doc => {
+                        vscode.window.showTextDocument(doc);
+                    });
+                }
+            });
+            console.log('Claude .gitignore rules added to workspace');
+        }
+    } catch (error) {
+        console.warn('Failed to update .gitignore rules:', error);
+        vscode.window.showWarningMessage('Failed to update .gitignore with Claude security rules. Please manually add .claude/.chats/ to your .gitignore file.');
+    }
+}
+
+async function checkForClaudemdAndOfferProjectPlan() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return;
+    }
+
+    try {
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const claudemdPath = path.join(workspacePath, 'CLAUDE.md');
+        const claudemdExists = await fs.pathExists(claudemdPath);
+        
+        if (claudemdExists) {
+            const planPath = path.join(workspacePath, '.claude', '.plans', 'PROJECT_PLAN.md');
+            const planExists = await fs.pathExists(planPath);
+            
+            // Always check if CLAUDE.md needs the PROJECT_PLAN rule
+            await ensureProjectPlanRuleInClaudeMd(workspacePath);
+            
+            // If PROJECT_PLAN.md doesn't exist, offer to create it
+            if (!planExists) {
+                const message = 'CLAUDE.md detected! Would you like to create a PROJECT_PLAN.md to help Claude Code understand your project better?';
+                vscode.window.showInformationMessage(message, 'Yes, Create PROJECT_PLAN.md', 'Not Now').then(selection => {
+                    if (selection === 'Yes, Create PROJECT_PLAN.md') {
+                        createProjectPlanTemplate();
+                    }
+                });
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to check for CLAUDE.md:', error);
+    }
+}
+
+async function ensureProjectPlanRuleInClaudeMd(workspacePath: string) {
+    try {
+        const claudemdPath = path.join(workspacePath, 'CLAUDE.md');
+        const projectPlanRule = `
+
+# PROJECT_PLAN Integration
+# Added by Claude Config Manager Extension
+
+When working on this project, always refer to and maintain the project plan located at \`.claude/.plans/PROJECT_PLAN.md\`.
+
+**Instructions for Claude Code:**
+1. **Read the project plan first** - Always check \`.claude/.plans/PROJECT_PLAN.md\` when starting work to understand the project context, architecture, and current priorities.
+2. **Update the project plan regularly** - When making significant changes, discoveries, or completing major features, update the relevant sections in PROJECT_PLAN.md to keep it current.
+3. **Use it for context** - Reference the project plan when making architectural decisions, understanding dependencies, or explaining code to ensure consistency with project goals.
+
+**Plan Mode Integration:**
+- **When entering plan mode**: Read the current PROJECT_PLAN.md to understand existing context and priorities
+- **During plan mode**: Build upon and refine the existing project plan structure
+- **When exiting plan mode**: ALWAYS update PROJECT_PLAN.md with your new plan details, replacing or enhancing the relevant sections (Architecture, TODO, Development Workflow, etc.)
+- **Plan persistence**: The PROJECT_PLAN.md serves as the permanent repository for all planning work - plan mode should treat it as the single source of truth
+
+This ensures better code quality and maintains project knowledge continuity across different Claude Code sessions and plan mode iterations.
+`;
+
+        // Check if the rule already exists
+        if (await fs.pathExists(claudemdPath)) {
+            const content = await fs.readFile(claudemdPath, 'utf8');
+            if (content.includes('# PROJECT_PLAN Integration')) {
+                console.log('PROJECT_PLAN rule already exists in CLAUDE.md');
+                return;
+            }
+        }
+
+        // Append the rule to CLAUDE.md
+        await fs.appendFile(claudemdPath, projectPlanRule);
+        console.log('PROJECT_PLAN rule added to CLAUDE.md');
+    } catch (error) {
+        console.error('Failed to add PROJECT_PLAN rule to CLAUDE.md:', error);
+        throw error;
+    }
+}
+
+async function createProjectPlanTemplate() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return;
+    }
+
+    try {
+        const workspacePath = workspaceFolder.uri.fsPath;
+        const planDir = path.join(workspacePath, '.claude', '.plans');
+        const planPath = path.join(planDir, 'PROJECT_PLAN.md');
+        
+        await fs.ensureDir(planDir);
+        
+        const template = `# Project Plan
+
+## Overview
+Brief description of what this project does and its main purpose.
+
+## Architecture
+Key components, technologies, and how they work together.
+
+## Development Setup
+Steps needed to get the project running locally:
+1. Prerequisites (Node.js version, dependencies, etc.)
+2. Installation commands
+3. Configuration steps
+4. How to run/test
+
+## Key Files & Directories
+- \`src/\` - Main source code
+- \`tests/\` - Test files
+- \`docs/\` - Documentation
+- Important configuration files and their purposes
+
+## Development Workflow
+- How to make changes
+- Testing approach
+- Code review process
+- Deployment/release process
+
+## Important Context
+Any domain-specific knowledge, business rules, or gotchas that would help Claude Code understand the project better.
+
+## TODO
+Current priorities and planned improvements.
+`;
+        
+        await fs.writeFile(planPath, template);
+        
+        // Add PROJECT_PLAN rule to CLAUDE.md
+        await ensureProjectPlanRuleInClaudeMd(workspacePath);
+        
+        // Open the file in the editor
+        const document = await vscode.workspace.openTextDocument(planPath);
+        await vscode.window.showTextDocument(document);
+        
+        vscode.window.showInformationMessage('PROJECT_PLAN.md created and CLAUDE.md updated! Fill out the project plan to help Claude Code understand your project better.');
+    } catch (error) {
+        console.error('Failed to create PROJECT_PLAN.md:', error);
+        vscode.window.showErrorMessage(`Failed to create PROJECT_PLAN.md: ${error}`);
+    }
+}
+
+export async function activate(context: vscode.ExtensionContext) {
     console.log('Claude Config Manager is now active!');
 
-    // Ensure .claude directory structure exists
-    ensureClaudeDirectoryStructure().catch(err => {
-        console.error('Failed to create Claude directory structure:', err);
-    });
+    // Initialize directory structure and security features safely
+    try {
+        await ensureClaudeDirectoryStructure();
+        await ensureGitignoreRules();
+        // Check for CLAUDE.md and offer to create PROJECT_PLAN.md
+        await checkForClaudemdAndOfferProjectPlan();
+    } catch (error) {
+        console.error('Failed during extension initialization:', error);
+        // Don't let initialization errors crash the extension
+    }
 
     // Initialize managers
     repositoryManager = new RepositoryManager(context);
@@ -92,7 +265,19 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),
         vscode.commands.registerCommand('claude-config.viewConversation', (conversationSummary) => viewConversationCommand(conversationViewer, conversationSummary)),
         vscode.commands.registerCommand('claude-config.exportConversation', (conversationSummary) => exportConversationCommand(conversationManager, conversationSummary)),
-        vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager))
+        vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager)),
+        vscode.commands.registerCommand('claude-config.addProjectPlanRule', () => {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (workspaceFolder) {
+                ensureProjectPlanRuleInClaudeMd(workspaceFolder.uri.fsPath).then(() => {
+                    vscode.window.showInformationMessage('PROJECT_PLAN rule added to CLAUDE.md');
+                }).catch(err => {
+                    vscode.window.showErrorMessage(`Failed to add PROJECT_PLAN rule: ${err.message}`);
+                });
+            } else {
+                vscode.window.showErrorMessage('No workspace folder found');
+            }
+        })
     ];
 
     commands.forEach(command => context.subscriptions.push(command));

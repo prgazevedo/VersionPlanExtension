@@ -1,8 +1,8 @@
 {
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
-  "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync and conversation history browser with Git integration",
-  "version": "3.1.0",
+  "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, and intelligent PROJECT_PLAN integration with Git",
+  "version": "3.2.0",
   "publisher": "prgazevedo",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -82,6 +82,12 @@
         "title": "Export All Conversations",
         "category": "Claude Config",
         "icon": "$(save-all)"
+      },
+      {
+        "command": "claude-config.addProjectPlanRule",
+        "title": "Add PROJECT_PLAN Rule to CLAUDE.md",
+        "category": "Claude Config",
+        "icon": "$(add)"
       }
     ],
     "viewsContainers": {
@@ -130,25 +136,6 @@
         "claude-config.conversationDataPath": {
           "type": "string",
           "description": "Custom path to Claude conversation data directory (leave empty for default ~/.claude/projects)"
-        },
-        "claude-config.backupEnabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable backup of conversations to Git repository"
-        },
-        "claude-config.backupRepository": {
-          "type": "string",
-          "description": "Git repository URL for conversation backups"
-        },
-        "claude-config.autoBackup": {
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically backup conversations after each session"
-        },
-        "claude-config.backupRetentionDays": {
-          "type": "number",
-          "default": 30,
-          "description": "Number of days to retain conversation backups"
         }
       }
     }

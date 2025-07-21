@@ -4,6 +4,7 @@ import * as fs from 'fs-extra';
 import { simpleGit } from 'simple-git';
 import { RepositoryManager } from '../repository';
 import { ClaudeFileManager } from '../fileManager';
+import { GitignoreManager } from '../utils/GitignoreManager';
 
 export async function syncCommand(repositoryManager: RepositoryManager, fileManager: ClaudeFileManager): Promise<void> {
     try {
@@ -16,17 +17,48 @@ export async function syncCommand(repositoryManager: RepositoryManager, fileMana
         const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
         const claudeDir = path.join(workspacePath, '.claude');
         
-        // Check for any team-sharable Claude configuration
-        const plansDir = path.join(claudeDir, '.plans');
-        const settingsFile = path.join(claudeDir, 'settings.json');
-        const commandsDir = path.join(claudeDir, 'commands');
+        // Verify .gitignore compliance first
+        const compliance = await GitignoreManager.checkGitignoreCompliance(workspacePath);
+        if (!compliance.hasGitignore || compliance.missingRules.length > 0) {
+            const message = 'Your .gitignore file is missing security rules to prevent private conversation data from being committed. Fix this first?';
+            const selection = await vscode.window.showWarningMessage(message, 'Fix .gitignore', 'Continue Anyway');
+            if (selection === 'Fix .gitignore') {
+                await GitignoreManager.ensureGitignoreRules(workspacePath);
+                vscode.window.showInformationMessage('Security rules added to .gitignore. Please run sync again.');
+                return;
+            }
+        }
         
-        const hasPlans = await fs.pathExists(plansDir);
-        const hasSettings = await fs.pathExists(settingsFile);
-        const hasCommands = await fs.pathExists(commandsDir);
+        // Check for team-sharable Claude configuration
+        const safeFilesToSync = GitignoreManager.getSafeFilesToSync();
+        const filesToCheck = [
+            { path: path.join(claudeDir, '.plans'), name: '.claude/.plans/' },
+            { path: path.join(claudeDir, 'settings.json'), name: '.claude/settings.json' },
+            { path: path.join(claudeDir, 'commands'), name: '.claude/commands/' }
+        ];
         
-        if (!hasPlans && !hasSettings && !hasCommands) {
-            vscode.window.showWarningMessage('No Claude configuration found to sync. Create PROJECT_PLAN.md, team settings, or commands first.');
+        const existingFiles: string[] = [];
+        for (const file of filesToCheck) {
+            if (await fs.pathExists(file.path)) {
+                existingFiles.push(file.name);
+            }
+        }
+        
+        if (existingFiles.length === 0) {
+            vscode.window.showWarningMessage('No team-sharable Claude configuration found to sync. Create PROJECT_PLAN.md, team settings, or commands first.');
+            return;
+        }
+
+        // Show user what will be synced
+        const filesToSyncMessage = `Files to sync to Git:\n• ${existingFiles.join('\n• ')}\n\n${GitignoreManager.getPrivateFilesDescription()}`;
+        const proceedSelection = await vscode.window.showInformationMessage(
+            'Ready to sync Claude configuration to Git?',
+            { modal: true, detail: filesToSyncMessage },
+            'Sync to Git',
+            'Cancel'
+        );
+        
+        if (proceedSelection !== 'Sync to Git') {
             return;
         }
 
@@ -41,7 +73,7 @@ export async function syncCommand(repositoryManager: RepositoryManager, fileMana
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: 'Syncing Claude configuration to git',
+            title: 'Syncing team-sharable Claude configuration to Git',
             cancellable: false
         }, async (progress) => {
             progress.report({ increment: 0, message: 'Pulling latest changes...' });
@@ -53,26 +85,30 @@ export async function syncCommand(repositoryManager: RepositoryManager, fileMana
                 console.warn('Pull failed, continuing:', error);
             }
             
-            progress.report({ increment: 25, message: 'Adding Claude configuration...' });
+            progress.report({ increment: 25, message: 'Adding team-sharable files only...' });
             
-            // Add each existing directory/file separately
-            if (hasPlans) {
-                await git.add('.claude/.plans/');
+            // Add only the safe files that exist
+            const addPromises = [];
+            for (const fileName of existingFiles) {
+                addPromises.push(git.add(fileName));
             }
-            if (hasSettings) {
-                await git.add('.claude/settings.json');
-            }
-            if (hasCommands) {
-                await git.add('.claude/commands/');
-            }
+            await Promise.all(addPromises);
             
-            progress.report({ increment: 50, message: 'Committing changes...' });
+            progress.report({ increment: 50, message: 'Validating no private files are included...' });
             
-            // Check if there are changes to commit
+            // Validate that no private files are being committed
             const status = await git.status();
-            console.log('Git status:', status);
+            const stagedFiles = status.files.filter(file => file.index !== ' ').map(file => file.path);
+            const privateFileViolations = await GitignoreManager.validateNoPrivateFiles(workspacePath, stagedFiles);
             
-            // Check for any .claude configuration changes
+            if (privateFileViolations.length > 0) {
+                await git.reset(['--soft', 'HEAD']);
+                throw new Error(`Security violation: Attempted to sync private files: ${privateFileViolations.join(', ')}`);
+            }
+            
+            progress.report({ increment: 60, message: 'Committing team-sharable changes...' });
+            
+            // Check for any valid .claude configuration changes
             const claudeDirChanged = status.files.some(file => 
                 file.path.startsWith('.claude/.plans/') ||
                 file.path === '.claude/settings.json' ||
@@ -80,7 +116,8 @@ export async function syncCommand(repositoryManager: RepositoryManager, fileMana
             );
             
             if (claudeDirChanged) {
-                await git.commit('Update Claude configuration');
+                const syncedFilesList = existingFiles.join(', ');
+                await git.commit(`Update Claude team configuration (${syncedFilesList})`);
                 progress.report({ increment: 75, message: 'Pushing to remote...' });
                 await git.push();
                 
@@ -91,10 +128,17 @@ export async function syncCommand(repositoryManager: RepositoryManager, fileMana
                 const remoteUrl = remotes.length > 0 ? remotes[0].refs.push : 'unknown';
                 
                 progress.report({ increment: 100, message: 'Successfully synced!' });
-                vscode.window.showInformationMessage(`Claude configuration synced to ${remoteName}/${currentBranch} (${remoteUrl})`);
+                vscode.window.showInformationMessage(
+                    `Team-sharable Claude configuration synced to ${remoteName}/${currentBranch}`,
+                    'View Files'
+                ).then(selection => {
+                    if (selection === 'View Files') {
+                        vscode.commands.executeCommand('workbench.files.action.showActiveFileInExplorer');
+                    }
+                });
             } else {
                 progress.report({ increment: 100, message: 'No changes to sync' });
-                vscode.window.showInformationMessage('Claude configuration is already up to date');
+                vscode.window.showInformationMessage('Claude team configuration is already up to date');
             }
         });
 

@@ -91,52 +91,133 @@ export class ConversationViewer {
         }
         .header {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
             border: 1px solid var(--vscode-panel-border);
         }
         .header h1 {
-            margin: 0 0 15px 0;
+            margin: 0 0 8px 0;
             color: var(--vscode-textLink-foreground);
-            font-size: 24px;
+            font-size: 18px;
+            font-weight: 600;
         }
-        .metadata {
+        .metadata-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .metadata-short {
+            flex: 0 0 auto;
+            min-width: 300px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 12px;
-            font-size: 14px;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 16px;
+            font-size: var(--vscode-editor-font-size, 14px);
+        }
+        .metadata-long {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: var(--vscode-editor-font-size, 14px);
         }
         .metadata-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .metadata-item.short {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1px;
         }
         .metadata-label {
             font-weight: 600;
             color: var(--vscode-descriptionForeground);
-            margin-right: 10px;
+            font-size: var(--vscode-editor-font-size, 14px);
+            white-space: nowrap;
         }
         .metadata-value {
             color: var(--vscode-editor-foreground);
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 13px;
+            font-family: var(--vscode-editor-font-family), 'Consolas', 'Courier New', monospace;
+            font-size: var(--vscode-editor-font-size, 14px);
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .search-container {
-            margin-bottom: 20px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--vscode-editor-background);
+            border-top: 1px solid var(--vscode-panel-border);
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
         }
         .search-container input {
-            width: 100%;
+            flex: 1;
             padding: 12px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border);
             border-radius: 6px;
             font-size: 14px;
+            max-width: 300px;
+        }
+        .search-nav-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .search-nav-btn {
+            padding: 8px 12px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: none;
+        }
+        .search-nav-btn:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        .search-nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #collapseAllBtn, #expandAllBtn {
+            display: block; /* Always visible, unlike search navigation buttons */
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+        }
+        #collapseAllBtn:hover, #expandAllBtn:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
+        }
+        .search-results-info {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            white-space: nowrap;
+            display: none;
+        }
+        .search-highlight {
+            background-color: var(--vscode-editor-findMatchBackground);
+            color: var(--vscode-editor-findMatchForeground);
+            border-radius: 2px;
+            padding: 1px 2px;
+        }
+        .search-highlight.current {
+            background-color: var(--vscode-editor-findMatchHighlightBackground);
+            color: var(--vscode-editor-findMatchHighlightForeground);
         }
         .conversation {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
             padding: 15px;
+            padding-bottom: 100px; /* Add space for fixed search bar */
             border-radius: 8px;
             border: 1px solid var(--vscode-panel-border);
             font-family: var(--vscode-editor-font-family), 'Consolas', 'Courier New', monospace;
@@ -225,55 +306,69 @@ export class ConversationViewer {
 
     <div class="header">
         <h1>💬 Claude Conversation</h1>
-        <div class="metadata">
-            <div class="metadata-item">
-                <span class="metadata-label">Session ID:</span>
-                <span class="metadata-value">${conversation.sessionId || 'Unknown'}</span>
+        <div class="metadata-container">
+            <!-- Short values section - compact 2x3 grid -->
+            <div class="metadata-short">
+                <div class="metadata-item short">
+                    <span class="metadata-label">Duration:</span>
+                    <span class="metadata-value">${conversationSummary.duration || 'Unknown'}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Messages:</span>
+                    <span class="metadata-value">${conversationSummary.messageCount || 0}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Started:</span>
+                    <span class="metadata-value">${new Date(conversationSummary.startTime).toLocaleString()}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Service Tier:</span>
+                    <span class="metadata-value">${sessionMetadata.serviceTier}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Ended:</span>
+                    <span class="metadata-value">${conversationSummary.endTime ? new Date(conversationSummary.endTime).toLocaleString() : 'Ongoing'}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Version:</span>
+                    <span class="metadata-value">${sessionMetadata.version}</span>
+                </div>
             </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Project:</span>
-                <span class="metadata-value">${conversationSummary.projectName || 'Unknown'}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Started:</span>
-                <span class="metadata-value">${new Date(conversationSummary.startTime).toLocaleString()}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Ended:</span>
-                <span class="metadata-value">${conversationSummary.endTime ? new Date(conversationSummary.endTime).toLocaleString() : 'Ongoing'}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Duration:</span>
-                <span class="metadata-value">${conversationSummary.duration || 'Unknown'}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Messages:</span>
-                <span class="metadata-value">${conversationSummary.messageCount || 0}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Claude Code Version:</span>
-                <span class="metadata-value">${sessionMetadata.version}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Git Branch:</span>
-                <span class="metadata-value">${sessionMetadata.gitBranch}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Service Tier:</span>
-                <span class="metadata-value">${sessionMetadata.serviceTier}</span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Working Directory:</span>
-                <span class="metadata-value">${sessionMetadata.cwd}</span>
+            
+            <!-- Long values section -->
+            <div class="metadata-long">
+                <div class="metadata-item">
+                    <span class="metadata-label">Project:</span>
+                    <span class="metadata-value">${conversationSummary.projectName || 'Unknown'}</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Git Branch:</span>
+                    <span class="metadata-value">${sessionMetadata.gitBranch}</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Session ID:</span>
+                    <span class="metadata-value">${conversation.sessionId || 'Unknown'}</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Working Directory:</span>
+                    <span class="metadata-value">${sessionMetadata.cwd}</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="search-container">
-        <input type="text" id="searchInput" placeholder="🔍 Search conversation..." oninput="filterContent()">
-    </div>
-
     <div class="conversation" id="conversationContent">${conversationHTML}</div>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="🔍 Search conversation..." oninput="performSearch()" onkeydown="handleSearchKeydown(event)">
+        <div class="search-results-info" id="searchResultsInfo"></div>
+        <div class="search-nav-buttons">
+            <button class="search-nav-btn" id="prevBtn" onclick="navigateSearch(-1)">◀ Prev</button>
+            <button class="search-nav-btn" id="nextBtn" onclick="navigateSearch(1)">Next ▶</button>
+            <button class="search-nav-btn" id="collapseAllBtn" onclick="collapseAll()" title="Collapse all sections">⌃ Collapse All</button>
+            <button class="search-nav-btn" id="expandAllBtn" onclick="expandAll()" title="Expand all sections">⌄ Expand All</button>
+        </div>
+    </div>
 
     <script>
         function toggleRequest(requestId) {
@@ -303,38 +398,230 @@ export class ConversationViewer {
             console.log('Conversation loaded with all sections collapsed');
         });
         
-        function filterContent() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const requestHeaders = document.querySelectorAll('.request-header');
-            const requestContents = document.querySelectorAll('.request-content');
+        let searchResults = [];
+        let currentSearchIndex = -1;
+        let originalContent = '';
+
+        // Store original content on page load
+        window.addEventListener('load', function() {
+            originalContent = document.getElementById('conversationContent').innerHTML;
+        });
+
+        function performSearch() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            const searchResultsInfo = document.getElementById('searchResultsInfo');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
             
-            requestHeaders.forEach((header, index) => {
-                const content = requestContents[index];
-                const headerText = header.textContent.toLowerCase();
-                const contentText = content.textContent.toLowerCase();
+            // Clear previous search
+            clearSearch();
+            
+            if (searchTerm === '') {
+                // Hide search UI elements
+                searchResultsInfo.style.display = 'none';
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+                return;
+            }
+            
+            // Find and highlight all matches
+            searchResults = findAndHighlightMatches(searchTerm);
+            
+            if (searchResults.length > 0) {
+                currentSearchIndex = 0;
+                updateCurrentSearchResult();
                 
-                const matches = headerText.includes(searchTerm) || contentText.includes(searchTerm);
+                // Show search UI elements
+                searchResultsInfo.style.display = 'block';
+                prevBtn.style.display = 'block';
+                nextBtn.style.display = 'block';
                 
-                if (searchTerm === '' || matches) {
-                    header.style.display = 'flex';
-                    content.style.display = content.classList.contains('expanded') ? 'block' : 'none';
-                } else {
-                    header.style.display = 'none';
-                    content.style.display = 'none';
+                searchResultsInfo.textContent = searchResults.length + ' result' + (searchResults.length > 1 ? 's' : '');
+            } else {
+                searchResultsInfo.style.display = 'block';
+                searchResultsInfo.textContent = 'No results found';
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+            }
+        }
+
+        function findAndHighlightMatches(searchTerm) {
+            const conversationContent = document.getElementById('conversationContent');
+            const results = [];
+            
+            // Use case-insensitive search
+            const searchLower = searchTerm.toLowerCase();
+            
+            // Find all text nodes and highlight matches
+            function traverseAndHighlight(node) {
+                if (node.nodeType === 3) { // Text node
+                    const text = node.textContent;
+                    const textLower = text.toLowerCase();
+                    let searchIndex = 0;
+                    const matches = [];
+                    
+                    while (searchIndex < textLower.length) {
+                        const foundIndex = textLower.indexOf(searchLower, searchIndex);
+                        if (foundIndex === -1) break;
+                        
+                        matches.push({
+                            index: foundIndex,
+                            text: text.substring(foundIndex, foundIndex + searchTerm.length)
+                        });
+                        searchIndex = foundIndex + searchTerm.length;
+                    }
+                    
+                    if (matches.length > 0) {
+                        const parent = node.parentNode;
+                        const fragment = document.createDocumentFragment();
+                        let lastIndex = 0;
+                        
+                        matches.forEach(function(match) {
+                            // Add text before match
+                            if (match.index > lastIndex) {
+                                fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+                            }
+                            
+                            // Create highlighted span
+                            const highlightSpan = document.createElement('span');
+                            highlightSpan.className = 'search-highlight';
+                            highlightSpan.setAttribute('data-search-index', results.length.toString());
+                            highlightSpan.textContent = match.text;
+                            fragment.appendChild(highlightSpan);
+                            
+                            results.push(highlightSpan);
+                            lastIndex = match.index + searchTerm.length;
+                        });
+                        
+                        // Add remaining text
+                        if (lastIndex < text.length) {
+                            fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+                        }
+                        
+                        parent.replaceChild(fragment, node);
+                    }
+                } else if (node.nodeType === 1) { // Element node
+                    // Skip already highlighted content
+                    if (!node.classList.contains('search-highlight')) {
+                        const children = Array.from(node.childNodes);
+                        children.forEach(function(child) { return traverseAndHighlight(child); });
+                    }
+                }
+            }
+            
+            traverseAndHighlight(conversationContent);
+            
+            // Expand sections that contain matches
+            results.forEach(function(result) {
+                let parent = result.closest('.request-content');
+                if (parent && !parent.classList.contains('expanded')) {
+                    const header = parent.previousElementSibling;
+                    if (header && header.classList.contains('request-header')) {
+                        const icon = header.querySelector('.collapse-icon');
+                        parent.classList.add('expanded');
+                        if (icon) icon.classList.add('expanded');
+                    }
                 }
             });
             
-            // If searching, expand all matching sections
-            if (searchTerm !== '') {
-                requestHeaders.forEach((header, index) => {
-                    if (header.style.display !== 'none') {
-                        const content = requestContents[index];
-                        const icon = header.querySelector('.collapse-icon');
-                        content.classList.add('expanded');
-                        icon.classList.add('expanded');
-                    }
-                });
+            return results;
+        }
+
+        function clearSearch() {
+            // Remove all highlighting
+            const highlights = document.querySelectorAll('.search-highlight');
+            highlights.forEach(function(highlight) {
+                const parent = highlight.parentNode;
+                parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+                parent.normalize(); // Merge adjacent text nodes
+            });
+        }
+
+        function updateCurrentSearchResult() {
+            if (searchResults.length === 0) return;
+            
+            // Remove current class from all results
+            searchResults.forEach(function(result) { return result.classList.remove('current'); });
+            
+            // Add current class to current result
+            const currentResult = searchResults[currentSearchIndex];
+            currentResult.classList.add('current');
+            
+            // Scroll to current result
+            currentResult.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+            
+            // Update results info
+            const searchResultsInfo = document.getElementById('searchResultsInfo');
+            searchResultsInfo.textContent = (currentSearchIndex + 1) + ' of ' + searchResults.length;
+        }
+
+        function navigateSearch(direction) {
+            if (searchResults.length === 0) return;
+            
+            currentSearchIndex += direction;
+            
+            // Cycle through results
+            if (currentSearchIndex >= searchResults.length) {
+                currentSearchIndex = 0;
+            } else if (currentSearchIndex < 0) {
+                currentSearchIndex = searchResults.length - 1;
             }
+            
+            updateCurrentSearchResult();
+        }
+
+        function handleSearchKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (event.shiftKey) {
+                    navigateSearch(-1); // Shift+Enter for previous
+                } else {
+                    navigateSearch(1);  // Enter for next
+                }
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                document.getElementById('searchInput').value = '';
+                performSearch(); // Clear search
+            }
+        }
+
+        function collapseAll() {
+            const requestHeaders = document.querySelectorAll('.request-header');
+            const requestContents = document.querySelectorAll('.request-content');
+            
+            requestHeaders.forEach(function(header, index) {
+                const content = requestContents[index];
+                const icon = header.querySelector('.collapse-icon');
+                
+                // Collapse the section
+                content.classList.remove('expanded');
+                if (icon) {
+                    icon.classList.remove('expanded');
+                }
+            });
+            
+            // Clear search to avoid confusion with collapsed sections
+            document.getElementById('searchInput').value = '';
+            performSearch();
+        }
+
+        function expandAll() {
+            const requestHeaders = document.querySelectorAll('.request-header');
+            const requestContents = document.querySelectorAll('.request-content');
+            
+            requestHeaders.forEach(function(header, index) {
+                const content = requestContents[index];
+                const icon = header.querySelector('.collapse-icon');
+                
+                // Expand the section
+                content.classList.add('expanded');
+                if (icon) {
+                    icon.classList.add('expanded');
+                }
+            });
         }
     </script>
 </body>

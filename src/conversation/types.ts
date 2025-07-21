@@ -59,10 +59,3 @@ export interface ConversationFilter {
     messageType?: 'user' | 'assistant' | 'all';
 }
 
-export interface BackupConfig {
-    enabled: boolean;
-    repositoryUrl?: string;
-    autoBackup: boolean;
-    excludePatterns: string[];
-    retentionDays: number;
-}

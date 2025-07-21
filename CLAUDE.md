@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a VSCode extension called "Claude Config Manager" that provides comprehensive management for Claude Code workflows. The extension offers two main features:
 
-1. **CLAUDE.md Management**: Sync CLAUDE.md configuration files directly to the workspace's existing Git repository
+1. **CLAUDE.md Management**: Automatic PROJECT_PLAN rule injection and sync of CLAUDE.md configuration files directly to the workspace's existing Git repository
 2. **Conversation History Browser**: Browse, view, and export Claude Code conversation history with a rich webview interface
 
 The extension includes a custom activity bar icon with dual sidebar views for both configuration management and conversation browsing.
@@ -65,7 +65,9 @@ The extension includes a custom activity bar icon with dual sidebar views for bo
 
 **ConversationViewer** (`src/conversation/ConversationViewer.ts`):
 - Creates webview panels for displaying full conversations
-- Provides rich HTML interface with search functionality
+- Provides rich HTML interface with enhanced search functionality and navigation
+- Features asymmetrical metadata layout optimized for different content lengths
+- Includes Expand All/Collapse All controls for conversation section management
 - Handles conversation export to multiple formats (Markdown, JSON, Text)
 
 
@@ -75,8 +77,9 @@ Commands are modularized in `/src/commands/`:
 
 **CLAUDE.md Commands:**
 - `sync.ts` - Git sync operations (pull, add, commit, push)
-- `create.ts` - CLAUDE.md creation with template support
 - `edit.ts` - Open CLAUDE.md in editor
+- Extension automatically adds PROJECT_PLAN integration rules to CLAUDE.md
+- Manual command available: "Add PROJECT_PLAN Rule to CLAUDE.md"
 
 **Conversation Commands:**
 - `openConversations.ts` - Browse and manage conversation history
@@ -104,10 +107,6 @@ The extension uses VSCode configuration with prefix `claude-config`:
 
 **Conversation Settings:**
 - `conversationDataPath` - Custom path to Claude conversation data directory (default: ~/.claude/projects)
-- `backupEnabled` - Enable backup of conversations to Git repository (default: false)
-- `backupRepository` - Git repository URL for conversation backups
-- `autoBackup` - Automatically backup conversations after each session (default: false)
-- `backupRetentionDays` - Number of days to retain conversation backups (default: 30)
 
 ## How It Works
 
@@ -118,6 +117,15 @@ The extension syncs CLAUDE.md files directly to the workspace's existing Git rep
 - Syncs `CLAUDE.md` in the workspace root
 - Uses workspace's existing Git configuration and remote
 - Commits directly to project's Git history with message "Update CLAUDE.md configuration"
+
+### PROJECT_PLAN Integration
+When CLAUDE.md is detected in the workspace:
+
+- Extension automatically adds PROJECT_PLAN integration rules to CLAUDE.md
+- Creates `.claude/.plans/PROJECT_PLAN.md` template when requested
+- Instructions tell Claude Code to read and maintain the project plan
+- Plan mode sessions use PROJECT_PLAN.md as the central repository
+- Manual command available if automatic rule addition is needed
 
 ### Conversation History Browser
 The extension provides comprehensive conversation history management:
@@ -146,7 +154,21 @@ The extension provides comprehensive conversation history management:
 - Conversation files (`.claude/.chats/`) are excluded from Git tracking to prevent accidental secret exposure
 - GitHub push protection integration to block commits containing sensitive data
 
-## Recent Updates (v3.1.0)
+## Recent Updates
+
+### v3.2.0 - Enhanced Conversation Viewer UI
+
+- **Expand/Collapse All Controls**: Added dedicated buttons for quick conversation section management
+- **Asymmetrical Metadata Layout**: Two-section design with compact display for short values and dedicated space for longer content
+- **Optimized Header Display**: Improved space utilization and readability with better text overflow handling
+- **Enhanced UI Controls**: Better visual organization and user experience in conversation viewer
+
+### v3.1.0+ - PROJECT_PLAN Integration & Search Enhancement
+
+- **PROJECT_PLAN Integration**: Automatic creation of `.claude/.plans/PROJECT_PLAN.md` with CLAUDE.md integration
+- **Plan Mode Integration**: PROJECT_PLAN.md serves as the central repository for plan mode sessions
+- **Enhanced Security Compliance**: Automatic .gitignore rules addition for conversation data protection
+- **Crash Fixes**: Resolved async initialization race conditions for stable extension loading
 
 ### Conversation History Browser v3.1.0
 
@@ -162,3 +184,28 @@ The extension provides comprehensive conversation history management:
 - Implemented GitHub push protection compliance
 - Enhanced input validation across all user-facing inputs
 - Secure file handling with proper error boundaries
+- Automatic security rule enforcement in workspace .gitignore files
+
+
+
+
+
+
+
+# PROJECT_PLAN Integration
+# Added by Claude Config Manager Extension
+
+When working on this project, always refer to and maintain the project plan located at `.claude/.plans/PROJECT_PLAN.md`.
+
+**Instructions for Claude Code:**
+1. **Read the project plan first** - Always check `.claude/.plans/PROJECT_PLAN.md` when starting work to understand the project context, architecture, and current priorities.
+2. **Update the project plan regularly** - When making significant changes, discoveries, or completing major features, update the relevant sections in PROJECT_PLAN.md to keep it current.
+3. **Use it for context** - Reference the project plan when making architectural decisions, understanding dependencies, or explaining code to ensure consistency with project goals.
+
+**Plan Mode Integration:**
+- **When entering plan mode**: Read the current PROJECT_PLAN.md to understand existing context and priorities
+- **During plan mode**: Build upon and refine the existing project plan structure
+- **When exiting plan mode**: ALWAYS update PROJECT_PLAN.md with your new plan details, replacing or enhancing the relevant sections (Architecture, TODO, Development Workflow, etc.)
+- **Plan persistence**: The PROJECT_PLAN.md serves as the permanent repository for all planning work - plan mode should treat it as the single source of truth
+
+This ensures better code quality and maintains project knowledge continuity across different Claude Code sessions and plan mode iterations.
