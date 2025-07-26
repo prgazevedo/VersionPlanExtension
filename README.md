@@ -66,8 +66,8 @@ A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md 
 
 ### Basic Setup
 1. **Install the extension** (see installation instructions above)
-2. **Open a workspace folder** in VSCode (must be a Git repository)
-3. **Click the "C" icon** in the activity bar to access dual sidebar views
+2. **Click the "C" icon** in the activity bar to access dual sidebar views
+3. **Open a workspace folder** for full CLAUDE.md management features (Git repository recommended)
 
 ### CLAUDE.md Workflow
 1. **Create your CLAUDE.md**: Create your CLAUDE.md file in the workspace root
@@ -75,7 +75,7 @@ A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md 
 3. **Sync to Git**: Use the sync button or enable auto-sync to commit team-sharable configuration
 
 ### Conversation History
-1. **Browse conversations**: Click on the "Conversations" tree view in the sidebar
+1. **Browse conversations**: Click on the "Conversations" tree view in the sidebar (works without a workspace!)
 2. **View conversations**: Double-click any conversation to open in rich webview
 3. **Export conversations**: Right-click conversations for export options
 4. **Search conversations**: Use the built-in search functionality in conversation viewer
@@ -152,6 +152,7 @@ vsce package
 **Extension not appearing in VSCode:**
 - Ensure VSCode is restarted after installation
 - Check that the extension is enabled in the Extensions view
+- Extension icon should appear in activity bar even without a workspace (v3.2.1+)
 
 **Sync fails:**
 - Verify Git is installed and configured
@@ -238,6 +239,12 @@ This extension operates entirely locally and does not collect, transmit, or stor
 For security issues, please report them privately via GitHub's security advisory feature.
 
 ## Changelog
+
+### v3.2.1 - Icon Visibility Fix
+- **FIXED**: Extension icon now appears in activity bar even when no workspace is open
+- **NEW**: Graceful no-workspace handling with helpful messages to open a folder
+- **IMPROVED**: Conversation browser functionality works without requiring a workspace
+- **UX**: Better user onboarding with clear prompts to open workspace for full features
 
 ### v3.2.0 - Enhanced Conversation Viewer UI
 - **NEW**: Expand All and Collapse All buttons for quick conversation section management

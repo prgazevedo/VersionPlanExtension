@@ -18,7 +18,21 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
 
     async getChildren(element?: ClaudeTreeItem): Promise<ClaudeTreeItem[]> {
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-            return [];
+            // When no workspace is open, show limited functionality
+            const items: ClaudeTreeItem[] = [];
+            
+            items.push(new ClaudeTreeItem(
+                'Open Folder to Enable',
+                vscode.TreeItemCollapsibleState.None,
+                {
+                    command: 'vscode.openFolder',
+                    title: 'Open Folder',
+                    arguments: []
+                },
+                'folder-opened'
+            ));
+            
+            return items;
         }
 
         const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;

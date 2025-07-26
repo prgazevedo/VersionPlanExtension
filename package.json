@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, and intelligent PROJECT_PLAN integration with Git",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -103,13 +103,11 @@
       "claude-config-container": [
         {
           "id": "claude-config",
-          "name": "Claude Config",
-          "when": "workspaceFolderCount > 0"
+          "name": "Claude Config"
         },
         {
           "id": "claude-conversations",
-          "name": "Conversations",
-          "when": "workspaceFolderCount > 0"
+          "name": "Conversations"
         }
       ]
     },
@@ -120,9 +118,19 @@
         "when": "workspaceFolderCount > 0"
       },
       {
+        "view": "claude-config",
+        "contents": "Open a workspace to manage Claude configuration files.\n\n**Claude Config Manager** helps you:\n• Sync CLAUDE.md files to Git\n• Browse conversation history\n• Manage PROJECT_PLAN integration\n\n[Open Folder](command:vscode.openFolder)",
+        "when": "workspaceFolderCount == 0"
+      },
+      {
         "view": "claude-conversations",
         "contents": "Browse and manage your Claude conversations.\n[Open Conversations](command:claude-config.openConversations)\n[Refresh](command:claude-config.refreshConversations)",
         "when": "workspaceFolderCount > 0"
+      },
+      {
+        "view": "claude-conversations",
+        "contents": "**Conversation Browser** is available!\n\nYou can browse Claude conversations even without a workspace.\n\n[Open Conversations](command:claude-config.openConversations)\n[Refresh](command:claude-config.refreshConversations)\n\n*Open a workspace for full Claude Config features.*",
+        "when": "workspaceFolderCount == 0"
       }
     ],
     "configuration": {
