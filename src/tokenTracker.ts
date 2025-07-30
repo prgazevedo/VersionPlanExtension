@@ -85,11 +85,17 @@ export class TokenTracker {
         cacheRead: 1.50         // $1.50 per million
     };
 
+    // Helper function to ensure consistent cost rounding to 2 decimal places
+    private roundCost(cost: number): number {
+        return Math.round(cost * 100) / 100;
+    }
+
     private constructor(private context: vscode.ExtensionContext) {
         this.usageFilePath = path.join(context.globalStorageUri.fsPath, 'claude-usage-stats.json');
         this.claudeDataPath = this.getClaudeDataPath();
         this.statistics = this.initializeStatistics();
-        this.loadStatistics();
+        // Load statistics synchronously first, then setup async operations
+        this.loadStatisticsSync();
         this.setupFileWatcher();
         // Delay initial scan to avoid race condition with ConversationManager
         setTimeout(() => {
@@ -218,7 +224,7 @@ export class TokenTracker {
         
         const totalCost = this.calculateDetailedCost(inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens);
         
-        console.log(`TokenTracker: Extracted usage - ${totalTokens} tokens ($${totalCost.toFixed(4)}) from message ${message.uuid}`);
+        console.log(`TokenTracker: Extracted usage - ${totalTokens} tokens ($${totalCost.toFixed(2)}) from message ${message.uuid}`);
         
         return {
             timestamp: message.timestamp,
@@ -241,7 +247,9 @@ export class TokenTracker {
         const cacheCreationCost = (cacheCreationTokens / 1000000) * this.pricing.cacheCreation;
         const cacheReadCost = (cacheReadTokens / 1000000) * this.pricing.cacheRead;
         
-        return inputCost + outputCost + cacheCreationCost + cacheReadCost;
+        const totalCost = inputCost + outputCost + cacheCreationCost + cacheReadCost;
+        // Round to 2 decimal places to prevent floating-point precision issues
+        return this.roundCost(totalCost);
     }
 
     private initializeStatistics(): UsageStatistics {
@@ -260,13 +268,55 @@ export class TokenTracker {
         };
     }
 
+    private loadStatisticsSync(): void {
+        try {
+            fs.ensureDirSync(path.dirname(this.usageFilePath));
+            
+            if (fs.pathExistsSync(this.usageFilePath)) {
+                const data = fs.readJSONSync(this.usageFilePath);
+                // Ensure loaded data has valid numbers, fallback to 0 for invalid values
+                const sanitizedData = {
+                    ...data,
+                    totalTokens: Number(data.totalTokens) || 0,
+                    totalCost: Number(data.totalCost) || 0,
+                    operationCount: Number(data.operationCount) || 0,
+                    totalInputTokens: Number(data.totalInputTokens) || 0,
+                    totalOutputTokens: Number(data.totalOutputTokens) || 0,
+                    totalCacheCreationTokens: Number(data.totalCacheCreationTokens) || 0,
+                    totalCacheReadTokens: Number(data.totalCacheReadTokens) || 0,
+                    dailyUsage: Array.isArray(data.dailyUsage) ? data.dailyUsage : [],
+                    weeklyUsage: Array.isArray(data.weeklyUsage) ? data.weeklyUsage : [],
+                    monthlyUsage: Array.isArray(data.monthlyUsage) ? data.monthlyUsage : []
+                };
+                this.statistics = { ...this.initializeStatistics(), ...sanitizedData };
+            }
+        } catch (error) {
+            console.warn('Failed to load usage statistics:', error);
+            this.statistics = this.initializeStatistics();
+        }
+    }
+
     private async loadStatistics(): Promise<void> {
         try {
             await fs.ensureDir(path.dirname(this.usageFilePath));
             
             if (await fs.pathExists(this.usageFilePath)) {
                 const data = await fs.readJSON(this.usageFilePath);
-                this.statistics = { ...this.initializeStatistics(), ...data };
+                // Ensure loaded data has valid numbers, fallback to 0 for invalid values
+                const sanitizedData = {
+                    ...data,
+                    totalTokens: Number(data.totalTokens) || 0,
+                    totalCost: Number(data.totalCost) || 0,
+                    operationCount: Number(data.operationCount) || 0,
+                    totalInputTokens: Number(data.totalInputTokens) || 0,
+                    totalOutputTokens: Number(data.totalOutputTokens) || 0,
+                    totalCacheCreationTokens: Number(data.totalCacheCreationTokens) || 0,
+                    totalCacheReadTokens: Number(data.totalCacheReadTokens) || 0,
+                    dailyUsage: Array.isArray(data.dailyUsage) ? data.dailyUsage : [],
+                    weeklyUsage: Array.isArray(data.weeklyUsage) ? data.weeklyUsage : [],
+                    monthlyUsage: Array.isArray(data.monthlyUsage) ? data.monthlyUsage : []
+                };
+                this.statistics = { ...this.initializeStatistics(), ...sanitizedData };
             }
         } catch (error) {
             console.warn('Failed to load usage statistics:', error);
@@ -297,7 +347,7 @@ export class TokenTracker {
 
         // Update totals
         this.statistics.totalTokens += event.totalTokens;
-        this.statistics.totalCost += event.totalCost;
+        this.statistics.totalCost = this.roundCost(this.statistics.totalCost + event.totalCost);
         this.statistics.operationCount += 1;
         this.statistics.lastUpdated = event.timestamp;
         this.statistics.totalInputTokens += event.inputTokens;
@@ -355,7 +405,7 @@ export class TokenTracker {
         
         // Update usage totals
         conversationSummary.totalTokens += event.totalTokens;
-        conversationSummary.totalCost += event.totalCost;
+        conversationSummary.totalCost = this.roundCost(conversationSummary.totalCost + event.totalCost);
         conversationSummary.messageCount += 1;
         conversationSummary.inputTokens += event.inputTokens;
         conversationSummary.outputTokens += event.outputTokens;
@@ -391,7 +441,7 @@ export class TokenTracker {
         }
         
         dailyEntry.tokens += event.totalTokens;
-        dailyEntry.cost += event.totalCost;
+        dailyEntry.cost = this.roundCost(dailyEntry.cost + event.totalCost);
         dailyEntry.operations += 1;
 
         // Keep only last 30 days
@@ -422,7 +472,7 @@ export class TokenTracker {
         }
         
         weeklyEntry.tokens += event.totalTokens;
-        weeklyEntry.cost += event.totalCost;
+        weeklyEntry.cost = this.roundCost(weeklyEntry.cost + event.totalCost);
         weeklyEntry.operations += 1;
 
         // Keep only last 12 weeks
@@ -446,7 +496,7 @@ export class TokenTracker {
         }
         
         monthlyEntry.tokens += event.totalTokens;
-        monthlyEntry.cost += event.totalCost;
+        monthlyEntry.cost = this.roundCost(monthlyEntry.cost + event.totalCost);
         monthlyEntry.operations += 1;
 
         // Keep only last 12 months
@@ -485,7 +535,7 @@ export class TokenTracker {
         if (event.cacheCreationTokens > 0) tokenBreakdown.push(`${event.cacheCreationTokens} cache`);
         if (event.cacheReadTokens > 0) tokenBreakdown.push(`${event.cacheReadTokens} read`);
         
-        const message = `Claude Usage: ${event.totalTokens} tokens (${tokenBreakdown.join(', ')}) | Cost: $${event.totalCost.toFixed(4)}`;
+        const message = `Claude Usage: ${event.totalTokens} tokens (${tokenBreakdown.join(', ')}) | Cost: $${event.totalCost.toFixed(2)}`;
         vscode.window.showInformationMessage(message, 'View Stats').then(selection => {
             if (selection === 'View Stats') {
                 vscode.commands.executeCommand('claude-config.viewUsageStats');

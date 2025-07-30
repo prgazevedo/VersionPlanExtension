@@ -141,7 +141,7 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         ));
 
         items.push(new ClaudeTreeItem(
-            `Cost: $${stats.totalCost.toFixed(4)}`,
+            `Cost: $${stats.totalCost.toFixed(2)}`,
             vscode.TreeItemCollapsibleState.None,
             {
                 command: 'claude-config.viewUsageStats',

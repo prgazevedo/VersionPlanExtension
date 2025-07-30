@@ -107,7 +107,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
             const usage = tokenTracker.getConversationUsage(conversation.sessionId);
             
             if (usage && usage.totalTokens > 0) {
-                return `${conversation.messageCount} messages • ${usage.totalTokens.toLocaleString()} tokens • $${usage.totalCost.toFixed(4)}`;
+                return `${conversation.messageCount} messages • ${usage.totalTokens.toLocaleString()} tokens • $${usage.totalCost.toFixed(2)}`;
             }
         } catch (error) {
             // TokenTracker not available, fall back to basic description
@@ -169,7 +169,7 @@ Messages: ${conversation.messageCount}`;
 
 Token Usage:
 • Total: ${usage.totalTokens.toLocaleString()} tokens
-• Cost: $${usage.totalCost.toFixed(4)}
+• Cost: $${usage.totalCost.toFixed(2)}
 • Input: ${usage.inputTokens.toLocaleString()}
 • Output: ${usage.outputTokens.toLocaleString()}`;
             

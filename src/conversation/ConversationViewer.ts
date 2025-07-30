@@ -707,7 +707,7 @@ export class ConversationViewer {
                     const totalCost = inputCost + outputCost + cacheCost + readCost;
                     
                     if (totalCost > 0) {
-                        messageMetadata.push(`Cost: $${totalCost.toFixed(4)}`);
+                        messageMetadata.push(`Cost: $${totalCost.toFixed(2)}`);
                     }
                 }
             }
@@ -881,7 +881,7 @@ export class ConversationViewer {
                     const totalCost = inputCost + outputCost + cacheCost + readCost;
                     
                     if (totalCost > 0) {
-                        messageMetadata.push(`Cost: $${totalCost.toFixed(4)}`);
+                        messageMetadata.push(`Cost: $${totalCost.toFixed(2)}`);
                     }
                 }
             }
@@ -937,7 +937,7 @@ export class ConversationViewer {
                     const totalCost = inputCost + outputCost + cacheCost + readCost;
                     
                     if (totalCost > 0) {
-                        messageMetadata.push(`Cost: $${totalCost.toFixed(4)}`);
+                        messageMetadata.push(`Cost: $${totalCost.toFixed(2)}`);
                     }
                 }
             }

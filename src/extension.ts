@@ -8,6 +8,7 @@ import { ClaudeTreeDataProvider } from './claudeTreeProvider';
 import { ConversationManager } from './conversation/ConversationManager';
 import { ConversationTreeProvider } from './conversation/ConversationTreeProvider';
 import { ConversationViewer } from './conversation/ConversationViewer';
+import { UsageTreeProvider } from './UsageTreeProvider';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
@@ -20,6 +21,7 @@ let fileManager: ClaudeFileManager;
 let conversationManager: ConversationManager;
 let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
+let usageTreeProvider: UsageTreeProvider;
 let tokenTracker: TokenTracker;
 let statusBarItem: vscode.StatusBarItem;
 
@@ -234,13 +236,14 @@ export async function activate(context: vscode.ExtensionContext) {
         // Don't let initialization errors crash the extension
     }
 
-    // Initialize managers
+    // Initialize managers - TokenTracker must be initialized first
+    tokenTracker = TokenTracker.getInstance(context);
     repositoryManager = new RepositoryManager(context);
     fileManager = new ClaudeFileManager(context, repositoryManager);
     conversationManager = new ConversationManager(context);
     conversationTreeProvider = new ConversationTreeProvider(conversationManager);
     conversationViewer = new ConversationViewer(context, conversationManager);
-    tokenTracker = TokenTracker.getInstance(context);
+    usageTreeProvider = new UsageTreeProvider();
     
     // Debug: log initial statistics to help troubleshoot
     console.log('TokenTracker initialized, checking initial stats:', tokenTracker.getStatistics());
@@ -257,6 +260,11 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
 
+    vscode.window.createTreeView('claude-usage', {
+        treeDataProvider: usageTreeProvider,
+        showCollapseAll: true
+    });
+
     // Create status bar item
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.text = "$(sync) Claude Config";
@@ -270,21 +278,25 @@ export async function activate(context: vscode.ExtensionContext) {
             await syncCommand(repositoryManager, fileManager);
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             await tokenTracker.trackSyncOperation(workspaceFolder?.uri.fsPath);
+            usageTreeProvider.refresh();
         }),
         vscode.commands.registerCommand('claude-config.edit', async () => {
             await editCommand(fileManager);
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             await tokenTracker.trackClaudeMdEdit(workspaceFolder?.uri.fsPath);
+            usageTreeProvider.refresh();
         }),
         vscode.commands.registerCommand('claude-config.openConversations', () => openConversationsCommand(conversationManager, conversationViewer)),
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),
         vscode.commands.registerCommand('claude-config.viewConversation', async (conversationSummary) => {
             await viewConversationCommand(conversationViewer, conversationSummary);
             await tokenTracker.trackConversationView(conversationSummary.id, conversationSummary.messageCount);
+            usageTreeProvider.refresh();
         }),
         vscode.commands.registerCommand('claude-config.exportConversation', async (conversationSummary) => {
             await exportConversationCommand(conversationManager, conversationSummary);
             await tokenTracker.trackConversationExport(conversationSummary.id, conversationSummary.messageCount, 'single');
+            usageTreeProvider.refresh();
         }),
         vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager)),
         vscode.commands.registerCommand('claude-config.addProjectPlanRule', () => {
@@ -311,9 +323,11 @@ export async function activate(context: vscode.ExtensionContext) {
                 await tokenTracker.resetStatistics();
                 // Refresh the tree view to show updated stats
                 treeDataProvider.refresh();
+                usageTreeProvider.refresh();
             }
         }),
-        vscode.commands.registerCommand('claude-config.debugTokenTracker', () => debugTokenTrackerCommand())
+        vscode.commands.registerCommand('claude-config.debugTokenTracker', () => debugTokenTrackerCommand()),
+        vscode.commands.registerCommand('claude-config.refreshUsage', () => usageTreeProvider.refresh())
     ];
 
     commands.forEach(command => context.subscriptions.push(command));

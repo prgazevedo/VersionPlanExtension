@@ -1,4 +1,4 @@
-# Claude Config Manager v3.2.0 - Project Plan
+# Claude Config Manager v3.2.2 - Project Plan
 
 ## Overview
 Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md configuration management, conversation history browsing, and intelligent PROJECT_PLAN integration with Git. Now ready for VSCode marketplace publication.
@@ -12,6 +12,7 @@ Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md con
 - ✅ **COMPLETED**: GitignoreManager utility for security compliance
 - ✅ **COMPLETED**: v3.2.0 release from main branch
 - ✅ **COMPLETED**: Documentation updates for marketplace readiness
+- ✅ **COMPLETED**: v3.2.2 - Token tracker stability improvements and bug fixes
 
 ## Key Features Implemented
 
@@ -153,7 +154,7 @@ To publish to VSCode marketplace, you need to:
 
 ---
 
-**Version**: 3.2.0  
+**Version**: 3.2.2  
 **Status**: Ready for VSCode Marketplace Publication  
-**Last Updated**: July 2025 - Release v3.2.0  
+**Last Updated**: July 2025 - Release v3.2.2  
 **Next Review**: Post-marketplace publication feedback

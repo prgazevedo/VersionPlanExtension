@@ -181,6 +181,21 @@ The extension provides comprehensive token usage monitoring and cost estimation:
 
 ## Recent Updates
 
+### v3.2.2 - Token Tracker Stability & Bug Fixes
+
+- **TokenTracker Singleton Initialization**: Fixed singleton initialization and error handling for more stable token tracking
+- **Extension Icon Visibility**: Improved extension icon visibility without workspace requirement  
+- **Publisher ID Compliance**: Updated publisher ID for VSCode marketplace compliance
+- **Improved Error Handling**: Enhanced error handling in token tracking components
+- **Stability Improvements**: Fixed various initialization race conditions and edge cases
+
+### v3.2.3 - Usage Statistics Display Improvements
+
+- **Fixed Usage Statistics Display**: Corrected zero values in total usage, operations count, and period displays
+- **Cost Formatting**: All costs now rounded to cents (2 decimal places) for better readability
+- **Better Empty State Handling**: Usage periods now show meaningful descriptions when no data is available
+- **Improved Period Descriptions**: Daily/weekly/monthly usage shows actual counts or "No recent activity"
+
 ### v3.2.2 - Usage Tracking & Statistics Integration
 
 - **Token Usage Tracking**: Added comprehensive token usage monitoring with cost estimation

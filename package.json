@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, and intelligent PROJECT_PLAN integration with Git",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -106,6 +106,12 @@
         "title": "Debug Token Tracker",
         "category": "Claude Config",
         "icon": "$(bug)"
+      },
+      {
+        "command": "claude-config.refreshUsage",
+        "title": "Refresh Usage Statistics",
+        "category": "Claude Config",
+        "icon": "$(refresh)"
       }
     ],
     "viewsContainers": {
@@ -126,6 +132,10 @@
         {
           "id": "claude-conversations",
           "name": "Conversations"
+        },
+        {
+          "id": "claude-usage",
+          "name": "Usage Statistics"
         }
       ]
     },
@@ -149,6 +159,10 @@
         "view": "claude-conversations",
         "contents": "**Conversation Browser** is available!\n\nYou can browse Claude conversations even without a workspace.\n\n[Open Conversations](command:claude-config.openConversations)\n[Refresh](command:claude-config.refreshConversations)\n\n*Open a workspace for full Claude Config features.*",
         "when": "workspaceFolderCount == 0"
+      },
+      {
+        "view": "claude-usage",
+        "contents": "Track your Claude Code usage and costs.\n[View Detailed Statistics](command:claude-config.viewUsageStats)\n[Quick Usage Summary](command:claude-config.showUsageQuickPick)\n[Refresh](command:claude-config.refreshUsage)"
       }
     ],
     "configuration": {

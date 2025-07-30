@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 import { TokenTracker, UsageStatistics } from '../tokenTracker';
 
+function formatTokens(tokens: number): string {
+    if (tokens >= 1000000) {
+        const millions = Math.round(tokens / 1000);
+        return `${millions.toLocaleString()}M`;
+    }
+    return tokens.toLocaleString();
+}
+
 export async function viewUsageStatsCommand(): Promise<void> {
     const tokenTracker = TokenTracker.getInstance();
     const stats = tokenTracker.getStatistics();
@@ -46,7 +54,7 @@ export async function showUsageQuickPickCommand(): Promise<void> {
     const items: vscode.QuickPickItem[] = [
         {
             label: '📊 Total Usage',
-            detail: `${stats.totalTokens.toLocaleString()} tokens • $${stats.totalCost.toFixed(4)} • ${stats.operationCount} operations`
+            detail: `${formatTokens(stats.totalTokens)} tokens • $${stats.totalCost.toFixed(2)} • ${stats.operationCount} operations`
         },
         {
             label: '📅 Daily Usage',
@@ -108,7 +116,7 @@ export async function showUsageQuickPickCommand(): Promise<void> {
 async function showDailyUsageQuickPick(stats: UsageStatistics): Promise<void> {
     const items = stats.dailyUsage.map(day => ({
         label: `📅 ${day.date}`,
-        detail: `${day.tokens.toLocaleString()} tokens • $${day.cost.toFixed(4)} • ${day.operations} operations`
+        detail: `${formatTokens(day.tokens)} tokens • $${day.cost.toFixed(2)} • ${day.operations} operations`
     }));
 
     await vscode.window.showQuickPick(items, {
@@ -119,7 +127,7 @@ async function showDailyUsageQuickPick(stats: UsageStatistics): Promise<void> {
 async function showWeeklyUsageQuickPick(stats: UsageStatistics): Promise<void> {
     const items = stats.weeklyUsage.map(week => ({
         label: `📆 ${week.weekStart} to ${week.weekEnd}`,
-        detail: `${week.tokens.toLocaleString()} tokens • $${week.cost.toFixed(4)} • ${week.operations} operations`
+        detail: `${formatTokens(week.tokens)} tokens • $${week.cost.toFixed(2)} • ${week.operations} operations`
     }));
 
     await vscode.window.showQuickPick(items, {
@@ -130,7 +138,7 @@ async function showWeeklyUsageQuickPick(stats: UsageStatistics): Promise<void> {
 async function showMonthlyUsageQuickPick(stats: UsageStatistics): Promise<void> {
     const items = stats.monthlyUsage.map(month => ({
         label: `📈 ${month.month} ${month.year}`,
-        detail: `${month.tokens.toLocaleString()} tokens • $${month.cost.toFixed(4)} • ${month.operations} operations`
+        detail: `${formatTokens(month.tokens)} tokens • $${month.cost.toFixed(2)} • ${month.operations} operations`
     }));
 
     await vscode.window.showQuickPick(items, {
@@ -149,7 +157,7 @@ export async function debugTokenTrackerCommand(): Promise<void> {
         console.log('Debug Token Tracker - Conversation Usage:', conversationUsage);
         
         vscode.window.showInformationMessage(
-            `TokenTracker Debug: ${stats.totalTokens} tokens, $${stats.totalCost.toFixed(4)}, ${stats.operationCount} operations, ${conversationUsage.length} conversations tracked`,
+            `TokenTracker Debug: ${stats.totalTokens} tokens, $${stats.totalCost.toFixed(2)}, ${stats.operationCount} operations, ${conversationUsage.length} conversations tracked`,
             'View Console Output'
         ).then(selection => {
             if (selection === 'View Console Output') {
@@ -333,11 +341,11 @@ function generateUsageStatsHtml(stats: UsageStatistics): string {
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-number">${stats.totalTokens.toLocaleString()}</div>
+                <div class="stat-number">${formatTokens(stats.totalTokens)}</div>
                 <div class="stat-label">Total Tokens</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">$${stats.totalCost.toFixed(4)}</div>
+                <div class="stat-number">$${stats.totalCost.toFixed(2)}</div>
                 <div class="stat-label">Total Cost</div>
             </div>
             <div class="stat-card">
@@ -345,7 +353,7 @@ function generateUsageStatsHtml(stats: UsageStatistics): string {
                 <div class="stat-label">Operations</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">${stats.totalTokens > 0 ? (stats.totalCost / stats.totalTokens * 1000).toFixed(6) : '0'}</div>
+                <div class="stat-number">$${stats.totalTokens > 0 ? (stats.totalCost / stats.totalTokens * 1000).toFixed(2) : '0.00'}</div>
                 <div class="stat-label">Cost per 1K Tokens</div>
             </div>
             <div class="stat-card">
@@ -358,24 +366,24 @@ function generateUsageStatsHtml(stats: UsageStatistics): string {
             <div class="section-title">🔍 Token Breakdown</div>
             <div class="usage-breakdown">
                 <div class="breakdown-item">
-                    <div class="breakdown-number">${stats.totalInputTokens.toLocaleString()}</div>
+                    <div class="breakdown-number">${formatTokens(stats.totalInputTokens)}</div>
                     <div class="breakdown-label">Input Tokens</div>
-                    <div class="breakdown-label">$${((stats.totalInputTokens / 1000000) * 15).toFixed(4)}</div>
+                    <div class="breakdown-label">$${((stats.totalInputTokens / 1000000) * 15).toFixed(2)}</div>
                 </div>
                 <div class="breakdown-item">
-                    <div class="breakdown-number">${stats.totalOutputTokens.toLocaleString()}</div>
+                    <div class="breakdown-number">${formatTokens(stats.totalOutputTokens)}</div>
                     <div class="breakdown-label">Output Tokens</div>
-                    <div class="breakdown-label">$${((stats.totalOutputTokens / 1000000) * 75).toFixed(4)}</div>
+                    <div class="breakdown-label">$${((stats.totalOutputTokens / 1000000) * 75).toFixed(2)}</div>
                 </div>
                 <div class="breakdown-item">
-                    <div class="breakdown-number">${stats.totalCacheCreationTokens.toLocaleString()}</div>
+                    <div class="breakdown-number">${formatTokens(stats.totalCacheCreationTokens)}</div>
                     <div class="breakdown-label">Cache Creation</div>
-                    <div class="breakdown-label">$${((stats.totalCacheCreationTokens / 1000000) * 18.75).toFixed(4)}</div>
+                    <div class="breakdown-label">$${((stats.totalCacheCreationTokens / 1000000) * 18.75).toFixed(2)}</div>
                 </div>
                 <div class="breakdown-item">
-                    <div class="breakdown-number">${stats.totalCacheReadTokens.toLocaleString()}</div>
+                    <div class="breakdown-number">${formatTokens(stats.totalCacheReadTokens)}</div>
                     <div class="breakdown-label">Cache Read</div>
-                    <div class="breakdown-label">$${((stats.totalCacheReadTokens / 1000000) * 1.50).toFixed(4)}</div>
+                    <div class="breakdown-label">$${((stats.totalCacheReadTokens / 1000000) * 1.50).toFixed(2)}</div>
                 </div>
             </div>
         </div>
@@ -419,20 +427,20 @@ function generateUsageSection(title: string, data: any[], headers: string[]): st
         if (title.includes('Daily')) {
             cells = `
                 <td>${item.date}</td>
-                <td>${item.tokens.toLocaleString()}</td>
-                <td>$${item.cost.toFixed(4)}</td>
+                <td>${formatTokens(item.tokens)}</td>
+                <td>$${item.cost.toFixed(2)}</td>
                 <td>${item.operations}</td>`;
         } else if (title.includes('Weekly')) {
             cells = `
                 <td>${item.weekStart} - ${item.weekEnd}</td>
-                <td>${item.tokens.toLocaleString()}</td>
-                <td>$${item.cost.toFixed(4)}</td>
+                <td>${formatTokens(item.tokens)}</td>
+                <td>$${item.cost.toFixed(2)}</td>
                 <td>${item.operations}</td>`;
         } else if (title.includes('Monthly')) {
             cells = `
                 <td>${item.month} ${item.year}</td>
-                <td>${item.tokens.toLocaleString()}</td>
-                <td>$${item.cost.toFixed(4)}</td>
+                <td>${formatTokens(item.tokens)}</td>
+                <td>$${item.cost.toFixed(2)}</td>
                 <td>${item.operations}</td>`;
         }
         
