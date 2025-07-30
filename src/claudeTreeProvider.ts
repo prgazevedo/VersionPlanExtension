@@ -101,24 +101,31 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         ));
 
         // Usage statistics section
-        const tokenTracker = TokenTracker.getInstance();
-        const stats = tokenTracker.getStatistics();
-        
-        items.push(new ClaudeTreeItem(
-            'Usage Statistics',
-            vscode.TreeItemCollapsibleState.Collapsed,
-            undefined,
-            'graph',
-            'section'
-        ));
+        try {
+            const tokenTracker = TokenTracker.getInstance();
+            const stats = tokenTracker.getStatistics();
+            
+            items.push(new ClaudeTreeItem(
+                'Usage Statistics',
+                vscode.TreeItemCollapsibleState.Collapsed,
+                undefined,
+                'graph',
+                'section'
+            ));
+        } catch (error) {
+            // TokenTracker not initialized yet, skip usage statistics section
+            console.log('TokenTracker not available for tree provider');
+        }
 
         return items;
     }
 
     private getUsageStatisticsChildren(): ClaudeTreeItem[] {
-        const tokenTracker = TokenTracker.getInstance();
-        const stats = tokenTracker.getStatistics();
         const items: ClaudeTreeItem[] = [];
+        
+        try {
+            const tokenTracker = TokenTracker.getInstance();
+            const stats = tokenTracker.getStatistics();
 
         // Total usage summary
         items.push(new ClaudeTreeItem(
@@ -181,6 +188,11 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             'refresh',
             'action'
         ));
+
+        } catch (error) {
+            // TokenTracker not initialized yet, return empty items
+            console.log('TokenTracker not available for usage statistics children');
+        }
 
         return items;
     }

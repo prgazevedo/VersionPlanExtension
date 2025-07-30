@@ -101,6 +101,11 @@ export class TokenTracker {
         if (!TokenTracker.instance && context) {
             TokenTracker.instance = new TokenTracker(context);
         }
+        
+        if (!TokenTracker.instance) {
+            throw new Error('TokenTracker not initialized. Call getInstance with context first.');
+        }
+        
         return TokenTracker.instance;
     }
 

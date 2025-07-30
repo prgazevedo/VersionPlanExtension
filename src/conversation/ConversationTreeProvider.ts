@@ -102,11 +102,15 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     }
 
     private formatConversationDescription(conversation: ConversationSummary): string {
-        const tokenTracker = TokenTracker.getInstance();
-        const usage = tokenTracker.getConversationUsage(conversation.sessionId);
-        
-        if (usage && usage.totalTokens > 0) {
-            return `${conversation.messageCount} messages • ${usage.totalTokens.toLocaleString()} tokens • $${usage.totalCost.toFixed(4)}`;
+        try {
+            const tokenTracker = TokenTracker.getInstance();
+            const usage = tokenTracker.getConversationUsage(conversation.sessionId);
+            
+            if (usage && usage.totalTokens > 0) {
+                return `${conversation.messageCount} messages • ${usage.totalTokens.toLocaleString()} tokens • $${usage.totalCost.toFixed(4)}`;
+            }
+        } catch (error) {
+            // TokenTracker not available, fall back to basic description
         }
         
         return `${conversation.messageCount} messages`;
@@ -149,9 +153,6 @@ export class ConversationItem extends vscode.TreeItem {
         const startTime = new Date(conversation.startTime).toLocaleString();
         const endTime = conversation.endTime ? new Date(conversation.endTime).toLocaleString() : 'Ongoing';
         
-        const tokenTracker = TokenTracker.getInstance();
-        const usage = tokenTracker.getConversationUsage(conversation.sessionId);
-        
         let tooltip = `Session: ${conversation.sessionId}
 Project: ${conversation.projectName}
 Started: ${startTime}
@@ -159,7 +160,11 @@ Ended: ${endTime}
 Duration: ${conversation.duration || 'Unknown'}
 Messages: ${conversation.messageCount}`;
 
-        if (usage && usage.totalTokens > 0) {
+        try {
+            const tokenTracker = TokenTracker.getInstance();
+            const usage = tokenTracker.getConversationUsage(conversation.sessionId);
+        
+            if (usage && usage.totalTokens > 0) {
             tooltip += `
 
 Token Usage:
@@ -174,6 +179,9 @@ Token Usage:
             if (usage.cacheReadTokens > 0) {
                 tooltip += `\n• Cache Read: ${usage.cacheReadTokens.toLocaleString()}`;
             }
+            }
+        } catch (error) {
+            // TokenTracker not available, skip usage information
         }
 
         tooltip += `\n\nFirst message: ${conversation.firstMessage || 'No content'}`;

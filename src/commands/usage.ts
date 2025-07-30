@@ -138,6 +138,30 @@ async function showMonthlyUsageQuickPick(stats: UsageStatistics): Promise<void> 
     });
 }
 
+export async function debugTokenTrackerCommand(): Promise<void> {
+    try {
+        const tokenTracker = TokenTracker.getInstance();
+        const stats = tokenTracker.getStatistics();
+        
+        console.log('Debug Token Tracker - Current Statistics:', stats);
+        
+        const conversationUsage = tokenTracker.getAllConversationUsage();
+        console.log('Debug Token Tracker - Conversation Usage:', conversationUsage);
+        
+        vscode.window.showInformationMessage(
+            `TokenTracker Debug: ${stats.totalTokens} tokens, $${stats.totalCost.toFixed(4)}, ${stats.operationCount} operations, ${conversationUsage.length} conversations tracked`,
+            'View Console Output'
+        ).then(selection => {
+            if (selection === 'View Console Output') {
+                vscode.commands.executeCommand('workbench.action.toggleDevTools');
+            }
+        });
+    } catch (error) {
+        console.error('TokenTracker debug error:', error);
+        vscode.window.showErrorMessage(`TokenTracker Debug Error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
 function generateUsageStatsHtml(stats: UsageStatistics): string {
     const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
     

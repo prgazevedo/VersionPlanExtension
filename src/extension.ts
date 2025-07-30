@@ -11,7 +11,7 @@ import { ConversationViewer } from './conversation/ConversationViewer';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
-import { viewUsageStatsCommand, showUsageQuickPickCommand } from './commands/usage';
+import { viewUsageStatsCommand, showUsageQuickPickCommand, debugTokenTrackerCommand } from './commands/usage';
 import { TokenTracker } from './tokenTracker';
 import { GitignoreManager } from './utils/GitignoreManager';
 
@@ -313,11 +313,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 treeDataProvider.refresh();
             }
         }),
-        vscode.commands.registerCommand('claude-config.debugTokenTracker', async () => {
-            const stats = tokenTracker.getStatistics();
-            console.log('Current statistics:', stats);
-            vscode.window.showInformationMessage(`Token Stats - Total: ${stats.totalTokens}, Cost: $${stats.totalCost.toFixed(4)}, Operations: ${stats.operationCount}`);
-        })
+        vscode.commands.registerCommand('claude-config.debugTokenTracker', () => debugTokenTrackerCommand())
     ];
 
     commands.forEach(command => context.subscriptions.push(command));
