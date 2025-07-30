@@ -4,6 +4,7 @@ export interface ConversationMessage {
     type: 'user' | 'assistant';
     parentUuid: string | null;
     sessionId: string;
+    conversationId?: string;
     cwd: string;
     gitBranch?: string;
     version?: string;

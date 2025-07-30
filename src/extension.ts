@@ -11,6 +11,8 @@ import { ConversationViewer } from './conversation/ConversationViewer';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
+import { viewUsageStatsCommand, showUsageQuickPickCommand } from './commands/usage';
+import { TokenTracker } from './tokenTracker';
 import { GitignoreManager } from './utils/GitignoreManager';
 
 let repositoryManager: RepositoryManager;
@@ -18,6 +20,7 @@ let fileManager: ClaudeFileManager;
 let conversationManager: ConversationManager;
 let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
+let tokenTracker: TokenTracker;
 let statusBarItem: vscode.StatusBarItem;
 
 async function ensureClaudeDirectoryStructure() {
@@ -237,6 +240,10 @@ export async function activate(context: vscode.ExtensionContext) {
     conversationManager = new ConversationManager(context);
     conversationTreeProvider = new ConversationTreeProvider(conversationManager);
     conversationViewer = new ConversationViewer(context, conversationManager);
+    tokenTracker = TokenTracker.getInstance(context);
+    
+    // Debug: log initial statistics to help troubleshoot
+    console.log('TokenTracker initialized, checking initial stats:', tokenTracker.getStatistics());
 
     // Create tree data providers and register tree views
     const treeDataProvider = new ClaudeTreeDataProvider();
@@ -259,12 +266,26 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register commands
     const commands = [
-        vscode.commands.registerCommand('claude-config.sync', () => syncCommand(repositoryManager, fileManager)),
-        vscode.commands.registerCommand('claude-config.edit', () => editCommand(fileManager)),
+        vscode.commands.registerCommand('claude-config.sync', async () => {
+            await syncCommand(repositoryManager, fileManager);
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            await tokenTracker.trackSyncOperation(workspaceFolder?.uri.fsPath);
+        }),
+        vscode.commands.registerCommand('claude-config.edit', async () => {
+            await editCommand(fileManager);
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            await tokenTracker.trackClaudeMdEdit(workspaceFolder?.uri.fsPath);
+        }),
         vscode.commands.registerCommand('claude-config.openConversations', () => openConversationsCommand(conversationManager, conversationViewer)),
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),
-        vscode.commands.registerCommand('claude-config.viewConversation', (conversationSummary) => viewConversationCommand(conversationViewer, conversationSummary)),
-        vscode.commands.registerCommand('claude-config.exportConversation', (conversationSummary) => exportConversationCommand(conversationManager, conversationSummary)),
+        vscode.commands.registerCommand('claude-config.viewConversation', async (conversationSummary) => {
+            await viewConversationCommand(conversationViewer, conversationSummary);
+            await tokenTracker.trackConversationView(conversationSummary.id, conversationSummary.messageCount);
+        }),
+        vscode.commands.registerCommand('claude-config.exportConversation', async (conversationSummary) => {
+            await exportConversationCommand(conversationManager, conversationSummary);
+            await tokenTracker.trackConversationExport(conversationSummary.id, conversationSummary.messageCount, 'single');
+        }),
         vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager)),
         vscode.commands.registerCommand('claude-config.addProjectPlanRule', () => {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -277,6 +298,25 @@ export async function activate(context: vscode.ExtensionContext) {
             } else {
                 vscode.window.showErrorMessage('No workspace folder found');
             }
+        }),
+        vscode.commands.registerCommand('claude-config.viewUsageStats', () => viewUsageStatsCommand()),
+        vscode.commands.registerCommand('claude-config.showUsageQuickPick', () => showUsageQuickPickCommand()),
+        vscode.commands.registerCommand('claude-config.resetUsageStats', async () => {
+            const result = await vscode.window.showWarningMessage(
+                'Are you sure you want to reset all usage statistics? This action cannot be undone.',
+                'Reset',
+                'Cancel'
+            );
+            if (result === 'Reset') {
+                await tokenTracker.resetStatistics();
+                // Refresh the tree view to show updated stats
+                treeDataProvider.refresh();
+            }
+        }),
+        vscode.commands.registerCommand('claude-config.debugTokenTracker', async () => {
+            const stats = tokenTracker.getStatistics();
+            console.log('Current statistics:', stats);
+            vscode.window.showInformationMessage(`Token Stats - Total: ${stats.totalTokens}, Cost: $${stats.totalCost.toFixed(4)}, Operations: ${stats.operationCount}`);
         })
     ];
 
@@ -321,6 +361,9 @@ export function deactivate() {
     }
     if (conversationViewer) {
         conversationViewer.dispose();
+    }
+    if (tokenTracker) {
+        tokenTracker.dispose();
     }
 }
 

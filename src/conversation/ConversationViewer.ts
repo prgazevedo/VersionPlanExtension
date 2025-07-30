@@ -691,6 +691,27 @@ export class ConversationViewer {
             if (firstMessage.message?.model) messageMetadata.push(`Model: ${firstMessage.message.model}`);
             if (firstMessage.userType) messageMetadata.push(`UserType: ${firstMessage.userType}`);
             
+            // Add token usage information if available
+            const usage = firstMessage.message?.usage;
+            if (usage && (usage.input_tokens || usage.output_tokens)) {
+                const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0) + 
+                                  (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+                if (totalTokens > 0) {
+                    messageMetadata.push(`Tokens: ${totalTokens.toLocaleString()}`);
+                    
+                    // Calculate cost
+                    const inputCost = ((usage.input_tokens || 0) / 1000000) * 15.0;
+                    const outputCost = ((usage.output_tokens || 0) / 1000000) * 75.0;
+                    const cacheCost = ((usage.cache_creation_input_tokens || 0) / 1000000) * 18.75;
+                    const readCost = ((usage.cache_read_input_tokens || 0) / 1000000) * 1.50;
+                    const totalCost = inputCost + outputCost + cacheCost + readCost;
+                    
+                    if (totalCost > 0) {
+                        messageMetadata.push(`Cost: $${totalCost.toFixed(4)}`);
+                    }
+                }
+            }
+            
             const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
             
             html += `<div class="request-header" onclick="toggleRequest('${requestId}')">
@@ -843,6 +864,28 @@ export class ConversationViewer {
             const messageMetadata = [];
             if (message.message?.model) messageMetadata.push(`Model: ${message.message.model}`);
             if (message.userType) messageMetadata.push(`UserType: ${message.userType}`);
+            
+            // Add token usage information if available
+            const usage = message.message?.usage;
+            if (usage && (usage.input_tokens || usage.output_tokens)) {
+                const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0) + 
+                                  (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+                if (totalTokens > 0) {
+                    messageMetadata.push(`Tokens: ${totalTokens.toLocaleString()}`);
+                    
+                    // Calculate cost
+                    const inputCost = ((usage.input_tokens || 0) / 1000000) * 15.0;
+                    const outputCost = ((usage.output_tokens || 0) / 1000000) * 75.0;
+                    const cacheCost = ((usage.cache_creation_input_tokens || 0) / 1000000) * 18.75;
+                    const readCost = ((usage.cache_read_input_tokens || 0) / 1000000) * 1.50;
+                    const totalCost = inputCost + outputCost + cacheCost + readCost;
+                    
+                    if (totalCost > 0) {
+                        messageMetadata.push(`Cost: $${totalCost.toFixed(4)}`);
+                    }
+                }
+            }
+            
             const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
             
             markdown += `## ${timestamp} - ${role}${metadataStr}\n\n`;
@@ -877,6 +920,28 @@ export class ConversationViewer {
             const messageMetadata = [];
             if (message.message?.model) messageMetadata.push(`Model: ${message.message.model}`);
             if (message.userType) messageMetadata.push(`UserType: ${message.userType}`);
+            
+            // Add token usage information if available
+            const usage = message.message?.usage;
+            if (usage && (usage.input_tokens || usage.output_tokens)) {
+                const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0) + 
+                                  (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+                if (totalTokens > 0) {
+                    messageMetadata.push(`Tokens: ${totalTokens.toLocaleString()}`);
+                    
+                    // Calculate cost
+                    const inputCost = ((usage.input_tokens || 0) / 1000000) * 15.0;
+                    const outputCost = ((usage.output_tokens || 0) / 1000000) * 75.0;
+                    const cacheCost = ((usage.cache_creation_input_tokens || 0) / 1000000) * 18.75;
+                    const readCost = ((usage.cache_read_input_tokens || 0) / 1000000) * 1.50;
+                    const totalCost = inputCost + outputCost + cacheCost + readCost;
+                    
+                    if (totalCost > 0) {
+                        messageMetadata.push(`Cost: $${totalCost.toFixed(4)}`);
+                    }
+                }
+            }
+            
             const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
             
             text += `${timestamp} - ${role}${metadataStr}\n`;

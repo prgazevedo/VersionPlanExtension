@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs-extra';
+import { TokenTracker } from './tokenTracker';
 
 export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ClaudeTreeItem | undefined | null | void> = new vscode.EventEmitter<ClaudeTreeItem | undefined | null | void>();
@@ -17,6 +18,10 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
     }
 
     async getChildren(element?: ClaudeTreeItem): Promise<ClaudeTreeItem[]> {
+        if (element && element.itemType === 'section' && element.label === 'Usage Statistics') {
+            return this.getUsageStatisticsChildren();
+        }
+
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
             // When no workspace is open, show limited functionality
             const items: ClaudeTreeItem[] = [];
@@ -95,6 +100,88 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             'export'
         ));
 
+        // Usage statistics section
+        const tokenTracker = TokenTracker.getInstance();
+        const stats = tokenTracker.getStatistics();
+        
+        items.push(new ClaudeTreeItem(
+            'Usage Statistics',
+            vscode.TreeItemCollapsibleState.Collapsed,
+            undefined,
+            'graph',
+            'section'
+        ));
+
+        return items;
+    }
+
+    private getUsageStatisticsChildren(): ClaudeTreeItem[] {
+        const tokenTracker = TokenTracker.getInstance();
+        const stats = tokenTracker.getStatistics();
+        const items: ClaudeTreeItem[] = [];
+
+        // Total usage summary
+        items.push(new ClaudeTreeItem(
+            `Total: ${stats.totalTokens.toLocaleString()} tokens`,
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.viewUsageStats',
+                title: 'View Detailed Statistics',
+                arguments: []
+            },
+            'info',
+            'stat'
+        ));
+
+        items.push(new ClaudeTreeItem(
+            `Cost: $${stats.totalCost.toFixed(4)}`,
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.viewUsageStats',
+                title: 'View Detailed Statistics',
+                arguments: []
+            },
+            'credit-card',
+            'stat'
+        ));
+
+        items.push(new ClaudeTreeItem(
+            `Operations: ${stats.operationCount.toLocaleString()}`,
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.viewUsageStats',
+                title: 'View Detailed Statistics',
+                arguments: []
+            },
+            'pulse',
+            'stat'
+        ));
+
+        // Quick actions
+        items.push(new ClaudeTreeItem(
+            'View Detailed Report',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.viewUsageStats',
+                title: 'View Detailed Statistics',
+                arguments: []
+            },
+            'graph-line',
+            'action'
+        ));
+
+        items.push(new ClaudeTreeItem(
+            'Reset Statistics',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.resetUsageStats',
+                title: 'Reset Usage Statistics',
+                arguments: []
+            },
+            'refresh',
+            'action'
+        ));
+
         return items;
     }
 }
@@ -104,7 +191,8 @@ export class ClaudeTreeItem extends vscode.TreeItem {
         public readonly label: string,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly command?: vscode.Command,
-        public readonly iconName?: string
+        public readonly iconName?: string,
+        public readonly itemType?: string
     ) {
         super(label, collapsibleState);
         
@@ -116,6 +204,6 @@ export class ClaudeTreeItem extends vscode.TreeItem {
             this.command = command;
         }
 
-        this.contextValue = iconName;
+        this.contextValue = itemType || iconName;
     }
 }

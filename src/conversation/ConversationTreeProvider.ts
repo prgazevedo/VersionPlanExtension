@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConversationManager } from './ConversationManager';
 import { ConversationSummary } from './types';
+import { TokenTracker } from '../tokenTracker';
 
 export class ConversationTreeProvider implements vscode.TreeDataProvider<ConversationItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ConversationItem | undefined | null | void> = new vscode.EventEmitter<ConversationItem | undefined | null | void>();
@@ -101,6 +102,13 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     }
 
     private formatConversationDescription(conversation: ConversationSummary): string {
+        const tokenTracker = TokenTracker.getInstance();
+        const usage = tokenTracker.getConversationUsage(conversation.sessionId);
+        
+        if (usage && usage.totalTokens > 0) {
+            return `${conversation.messageCount} messages • ${usage.totalTokens.toLocaleString()} tokens • $${usage.totalCost.toFixed(4)}`;
+        }
+        
         return `${conversation.messageCount} messages`;
     }
 
@@ -141,13 +149,35 @@ export class ConversationItem extends vscode.TreeItem {
         const startTime = new Date(conversation.startTime).toLocaleString();
         const endTime = conversation.endTime ? new Date(conversation.endTime).toLocaleString() : 'Ongoing';
         
-        return `Session: ${conversation.sessionId}
+        const tokenTracker = TokenTracker.getInstance();
+        const usage = tokenTracker.getConversationUsage(conversation.sessionId);
+        
+        let tooltip = `Session: ${conversation.sessionId}
 Project: ${conversation.projectName}
 Started: ${startTime}
 Ended: ${endTime}
 Duration: ${conversation.duration || 'Unknown'}
-Messages: ${conversation.messageCount}
+Messages: ${conversation.messageCount}`;
 
-First message: ${conversation.firstMessage || 'No content'}`;
+        if (usage && usage.totalTokens > 0) {
+            tooltip += `
+
+Token Usage:
+• Total: ${usage.totalTokens.toLocaleString()} tokens
+• Cost: $${usage.totalCost.toFixed(4)}
+• Input: ${usage.inputTokens.toLocaleString()}
+• Output: ${usage.outputTokens.toLocaleString()}`;
+            
+            if (usage.cacheCreationTokens > 0) {
+                tooltip += `\n• Cache Creation: ${usage.cacheCreationTokens.toLocaleString()}`;
+            }
+            if (usage.cacheReadTokens > 0) {
+                tooltip += `\n• Cache Read: ${usage.cacheReadTokens.toLocaleString()}`;
+            }
+        }
+
+        tooltip += `\n\nFirst message: ${conversation.firstMessage || 'No content'}`;
+        
+        return tooltip;
     }
 }

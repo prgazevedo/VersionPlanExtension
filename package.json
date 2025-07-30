@@ -88,6 +88,24 @@
         "title": "Add PROJECT_PLAN Rule to CLAUDE.md",
         "category": "Claude Config",
         "icon": "$(add)"
+      },
+      {
+        "command": "claude-config.viewUsageStats",
+        "title": "View Usage Statistics",
+        "category": "Claude Config",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "claude-config.showUsageQuickPick",
+        "title": "Show Usage Quick Pick",
+        "category": "Claude Config",
+        "icon": "$(pie-chart)"
+      },
+      {
+        "command": "claude-config.debugTokenTracker",
+        "title": "Debug Token Tracker",
+        "category": "Claude Config",
+        "icon": "$(bug)"
       }
     ],
     "viewsContainers": {
@@ -144,6 +162,16 @@
         "claude-config.conversationDataPath": {
           "type": "string",
           "description": "Custom path to Claude conversation data directory (leave empty for default ~/.claude/projects)"
+        },
+        "claude-config.tokenTrackingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable token usage tracking"
+        },
+        "claude-config.showUsageNotifications": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show usage notifications after operations"
         }
       }
     }
