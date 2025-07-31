@@ -50,7 +50,14 @@ export class UsageTreeProvider implements vscode.TreeDataProvider<UsageItem> {
     }
 
     private getRootItems(): UsageItem[] {
-        const stats = this.getTokenTracker().getStatistics();
+        const tokenTracker = this.getTokenTracker();
+        const stats = tokenTracker.getStatistics();
+        
+        // Get usage window information for percentage display
+        const percentage = tokenTracker.getCurrentUsagePercentage();
+        const usageStatus = tokenTracker.getUsageStatus();
+        const resetTime = tokenTracker.getTimeUntilReset();
+        const detectedTier = tokenTracker.detectServiceTier();
         
         // Calculate meaningful period descriptions
         const dailyPeriod = stats.dailyUsage.length > 0 ? `${stats.dailyUsage.length} days` : 'No recent activity';
@@ -58,7 +65,23 @@ export class UsageTreeProvider implements vscode.TreeDataProvider<UsageItem> {
         const monthlyPeriod = stats.monthlyUsage.length > 0 ? `${stats.monthlyUsage.length} months` : 'No recent activity';
         const operationsText = stats.operationCount > 0 ? `${stats.operationCount} operations performed` : 'No operations recorded';
         
+        // Format reset time
+        const resetText = resetTime.days > 0 ? 
+            `Resets in ${resetTime.days}d ${resetTime.hours}h` : 
+            `Resets in ${resetTime.hours}h ${resetTime.minutes}m`;
+        
+        // Choose icon based on usage status
+        const percentageIcon = usageStatus === 'critical' ? 'error' : 
+                              usageStatus === 'warning' ? 'warning' : 'graph';
+        
         return [
+            new UsageItem(
+                `Current Usage: ${percentage.toFixed(1)}%`,
+                `Weekly limit (${detectedTier.toUpperCase()}) • ${resetText}`,
+                vscode.TreeItemCollapsibleState.None,
+                'current-percentage',
+                new vscode.ThemeIcon(percentageIcon)
+            ),
             new UsageItem(
                 'Total Usage',
                 `${formatTokens(stats.totalTokens)} tokens • $${stats.totalCost.toFixed(2)}`,

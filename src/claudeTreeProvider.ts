@@ -126,6 +126,42 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         try {
             const tokenTracker = TokenTracker.getInstance();
             const stats = tokenTracker.getStatistics();
+            const usageStatus = tokenTracker.getUsageStatus();
+            const percentage = tokenTracker.getCurrentUsagePercentage();
+            const resetTime = tokenTracker.getTimeUntilReset();
+
+        // Current usage percentage (main feature)
+        const percentageIcon = usageStatus === 'critical' ? 'error' : 
+                              usageStatus === 'warning' ? 'warning' : 'graph';
+        
+        items.push(new ClaudeTreeItem(
+            `Weekly Usage: ${percentage.toFixed(1)}%`,
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.viewUsageStats',
+                title: 'View Detailed Statistics',
+                arguments: []
+            },
+            percentageIcon,
+            'percentage'
+        ));
+
+        // Reset time information
+        const resetText = resetTime.days > 0 ? 
+            `${resetTime.days}d ${resetTime.hours}h` : 
+            `${resetTime.hours}h ${resetTime.minutes}m`;
+        
+        items.push(new ClaudeTreeItem(
+            `Resets in: ${resetText}`,
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.viewUsageStats',
+                title: 'View Detailed Statistics',
+                arguments: []
+            },
+            'clock',
+            'reset-time'
+        ));
 
         // Total usage summary
         items.push(new ClaudeTreeItem(

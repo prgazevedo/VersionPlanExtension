@@ -186,6 +186,56 @@
           "type": "boolean",
           "default": false,
           "description": "Show usage notifications after operations"
+        },
+        "claude-config.usageTracking.customLimits": {
+          "type": "object",
+          "default": {},
+          "description": "Custom usage limits override (e.g., {\"weekly\": 1600000, \"daily\": 200000})",
+          "properties": {
+            "daily": {
+              "type": "number",
+              "description": "Custom daily token limit"
+            },
+            "weekly": {
+              "type": "number", 
+              "description": "Custom weekly token limit"
+            }
+          }
+        },
+        "claude-config.usageTracking.warningThresholds": {
+          "type": "object",
+          "default": {
+            "warning": 80,
+            "critical": 95
+          },
+          "description": "Usage percentage thresholds for warnings",
+          "properties": {
+            "warning": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 80,
+              "description": "Warning threshold percentage (default: 80%)"
+            },
+            "critical": {
+              "type": "number", 
+              "minimum": 1,
+              "maximum": 100,
+              "default": 95,
+              "description": "Critical threshold percentage (default: 95%)"
+            }
+          }
+        },
+        "claude-config.usageTracking.showPercentage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show usage percentage in status bar and tree views"
+        },
+        "claude-config.serviceTier": {
+          "type": "string",
+          "enum": ["free", "pro", "max-100", "max-200", "max-5x"],
+          "default": "max-5x",
+          "description": "Your Claude subscription tier (helps calculate accurate usage percentages)"
         }
       }
     }

@@ -13,8 +13,19 @@ Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md con
 - ✅ **COMPLETED**: v3.2.0 release from main branch
 - ✅ **COMPLETED**: Documentation updates for marketplace readiness
 - ✅ **COMPLETED**: v3.2.2 - Token tracker stability improvements and bug fixes
+- ✅ **COMPLETED**: v3.2.2 - Claude Usage Percentage Tracker implementation with real-time 0-100% usage monitoring
 
 ## Key Features Implemented
+
+### Claude Usage Percentage Tracker v3.2.2 🆕
+- **Real-time Percentage Monitoring**: Shows 0-100% usage within Claude's weekly rolling windows
+- **Automatic Service Tier Detection**: Detects Claude subscription tier (Free, Pro, Max-100, Max-200) from conversation metadata
+- **Status Bar Integration**: Live updates with visual indicators: `📊 Claude: 45.2% (2d 14h)`
+- **Weekly Rolling Windows**: Tracks 7-day usage cycles with precise reset time calculation
+- **Visual Warning System**: Icons change based on thresholds (📊 normal, ⚠️ warning at 80%, 🚨 critical at 95%)
+- **Tree View Integration**: Percentage indicators in Claude Config and Usage Statistics views
+- **Safety Checks**: Comprehensive error handling for division by zero, NaN values, and negative time calculations
+- **Configuration Options**: Custom limits, warning thresholds, and percentage display toggle
 
 ### Conversation History Browser v3.2.0
 - **Rich webview interface** with collapsible request grouping
@@ -55,6 +66,8 @@ workspace/
 3. **ConversationViewer** - Rich webview with collapsible interface
 4. **Export System** - Multi-format conversation export
 5. **Directory Management** - Workspace .claude structure
+6. **TokenTracker v3.2.2** - Usage percentage calculation engine with service tier detection
+7. **UsageTreeProvider v3.2.2** - Dedicated usage statistics tree view with percentage display
 
 ### Recent Major Fixes
 - ✅ **Collapsible content properly hides** when collapsed (no phantom spacing)
@@ -80,6 +93,9 @@ workspace/
 - `claude-config.refreshConversations` - Refresh conversation list
 - `claude-config.viewConversation` - Open conversation viewer
 - `claude-config.exportConversation` - Export conversation
+- **NEW v3.2.2**: `claude-config.viewUsageStats` - View detailed usage statistics with percentage breakdown
+- **NEW v3.2.2**: `claude-config.showUsageQuickPick` - Quick usage summary with percentage display
+- **NEW v3.2.2**: `claude-config.refreshUsage` - Refresh usage statistics and percentage calculations
 
 ## Development Commands
 

@@ -267,10 +267,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Create status bar item
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.text = "$(sync) Claude Config";
-    statusBarItem.command = 'claude-config.sync';
+    updateStatusBarWithUsage();
+    statusBarItem.command = 'claude-config.viewUsageStats';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
+
+    // Update status bar every 30 seconds
+    const statusBarUpdateInterval = setInterval(() => {
+        updateStatusBarWithUsage();
+    }, 30000);
+    
+    context.subscriptions.push(new vscode.Disposable(() => {
+        clearInterval(statusBarUpdateInterval);
+    }));
 
     // Register commands
     const commands = [
@@ -279,12 +288,14 @@ export async function activate(context: vscode.ExtensionContext) {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             await tokenTracker.trackSyncOperation(workspaceFolder?.uri.fsPath);
             usageTreeProvider.refresh();
+            updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.edit', async () => {
             await editCommand(fileManager);
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             await tokenTracker.trackClaudeMdEdit(workspaceFolder?.uri.fsPath);
             usageTreeProvider.refresh();
+            updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.openConversations', () => openConversationsCommand(conversationManager, conversationViewer)),
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),
@@ -292,11 +303,13 @@ export async function activate(context: vscode.ExtensionContext) {
             await viewConversationCommand(conversationViewer, conversationSummary);
             await tokenTracker.trackConversationView(conversationSummary.id, conversationSummary.messageCount);
             usageTreeProvider.refresh();
+            updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.exportConversation', async (conversationSummary) => {
             await exportConversationCommand(conversationManager, conversationSummary);
             await tokenTracker.trackConversationExport(conversationSummary.id, conversationSummary.messageCount, 'single');
             usageTreeProvider.refresh();
+            updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager)),
         vscode.commands.registerCommand('claude-config.addProjectPlanRule', () => {
@@ -324,10 +337,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 // Refresh the tree view to show updated stats
                 treeDataProvider.refresh();
                 usageTreeProvider.refresh();
+                updateStatusBarWithUsage();
             }
         }),
         vscode.commands.registerCommand('claude-config.debugTokenTracker', () => debugTokenTrackerCommand()),
-        vscode.commands.registerCommand('claude-config.refreshUsage', () => usageTreeProvider.refresh())
+        vscode.commands.registerCommand('claude-config.refreshUsage', () => {
+            usageTreeProvider.refresh();
+            updateStatusBarWithUsage();
+        })
     ];
 
     commands.forEach(command => context.subscriptions.push(command));
@@ -381,7 +398,63 @@ export function updateStatusBar(message: string, isError: boolean = false) {
     if (statusBarItem) {
         statusBarItem.text = `$(${isError ? 'error' : 'sync'}) ${message}`;
         setTimeout(() => {
-            statusBarItem.text = "$(sync) Claude Config";
+            updateStatusBarWithUsage();
         }, 3000);
+    }
+}
+
+function updateStatusBarWithUsage() {
+    if (!statusBarItem) return;
+    
+    try {
+        const config = vscode.workspace.getConfiguration('claude-config');
+        const showPercentage = config.get<boolean>('usageTracking.showPercentage', true);
+        
+        if (!showPercentage) {
+            statusBarItem.text = "$(sync) Claude Config";
+            statusBarItem.tooltip = "Claude Config Manager - Click for usage statistics";
+            return;
+        }
+        
+        const percentage = tokenTracker.getCurrentUsagePercentage();
+        const usageStatus = tokenTracker.getUsageStatus();
+        const resetTime = tokenTracker.getTimeUntilReset();
+        
+        // Choose icon based on usage status
+        let icon: string;
+        let statusColor: string = '';
+        
+        switch (usageStatus) {
+            case 'critical':
+                icon = '🚨';
+                statusColor = ' (Critical)';
+                break;
+            case 'warning':
+                icon = '⚠️';
+                statusColor = ' (Warning)';
+                break;
+            default:
+                icon = '📊';
+                break;
+        }
+        
+        // Format reset time
+        let resetText = '';
+        if (resetTime.days > 0) {
+            resetText = ` (${resetTime.days}d ${resetTime.hours}h)`;
+        } else if (resetTime.hours > 0) {
+            resetText = ` (${resetTime.hours}h ${resetTime.minutes}m)`;
+        } else {
+            resetText = ` (${resetTime.minutes}m)`;
+        }
+        
+        // Update status bar text
+        statusBarItem.text = `${icon} Claude: ${percentage.toFixed(1)}%${statusColor}${resetText}`;
+        statusBarItem.tooltip = `Claude Usage: ${percentage.toFixed(1)}% of daily estimate\nResets in: ${resetTime.days}d ${resetTime.hours}h ${resetTime.minutes}m\nClick for detailed statistics`;
+        
+    } catch (error) {
+        // Fallback to simple display if tokenTracker not ready
+        statusBarItem.text = "$(sync) Claude Config";
+        statusBarItem.tooltip = "Claude Config Manager - Click for usage statistics";
     }
 }
