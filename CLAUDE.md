@@ -327,6 +327,16 @@ The extension provides comprehensive WebDAV cloud synchronization capabilities:
 
 ## Recent Updates
 
+### v3.3.3 - ccusage Loading Experience Improvements
+
+- **🚀 Improved Loading State**: Added immediate loading spinner with theme-aware animation for ccusage initialization
+- **📊 Progressive Feedback**: Shows "Initializing ccusage..." message that updates after 10 seconds to explain package download
+- **🔧 Better Error Messages**: Clearer feedback when npx/npm is downloading ccusage package on first run
+- **✨ Smoother UX**: Users now understand the 20-30 second initial load is due to package download, not a freeze
+- **🎨 Enhanced UI**: Beautiful loading animation with VS Code theme integration and proper loading indicators
+- **📝 Improved Logging**: Switched to debug logger system for better troubleshooting without console spam
+- **🐛 Bug Fix**: Resolved the "stuck loading" issue that occurred during cold starts when ccusage was being downloaded
+
 ### v3.3.2 - Codebase Maintenance & Stability Release
 
 - **🧹 Code Cleanup**: Removed experimental and incomplete features from codebase for better stability

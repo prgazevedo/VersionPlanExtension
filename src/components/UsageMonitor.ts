@@ -5,16 +5,44 @@ import { loggers } from '../utils/Logger';
 export class UsageMonitor {
     private static hasShownCcusageUnavailableNotification = false;
     private static logger = loggers.ccusage;
+    private static loadingStartTime: number | null = null;
 
     /**
      * Generates the HTML for the visual usage monitor component
      */
     public static async generateMonitorHtml(): Promise<string> {
+        // Track when loading started for progress indication
+        if (!this.loadingStartTime) {
+            this.loadingStartTime = Date.now();
+        }
+
         try {
             const ccusageService = CcusageService.getInstance();
-            const todayData = await ccusageService.getTodayUsage();
-            return await this.generateHtmlWithCcusage(todayData);
+            
+            // Create a promise that resolves with loading HTML after a delay
+            const loadingPromise = new Promise<string>((resolve) => {
+                setTimeout(() => {
+                    resolve(this.generateLoadingHtml());
+                }, 100); // Show loading state almost immediately
+            });
+
+            // Create a promise for the actual data fetch
+            const dataPromise = ccusageService.getTodayUsage().then(todayData => {
+                this.loadingStartTime = null; // Reset on success
+                return this.generateHtmlWithCcusage(todayData);
+            });
+
+            // Race between showing loading state and getting actual data
+            // If data comes quickly, we skip the loading state
+            return await Promise.race([dataPromise, loadingPromise]).then(async (result) => {
+                // If we got the loading state, wait for the actual data
+                if (result === await loadingPromise) {
+                    return await dataPromise;
+                }
+                return result;
+            });
         } catch (error) {
+            this.loadingStartTime = null; // Reset on error
             UsageMonitor.logger.debug('ccusage unavailable for usage monitor:', error instanceof Error ? error.message : String(error));
             
             // Show helpful notification (only once per session)
@@ -25,6 +53,40 @@ export class UsageMonitor {
             
             return this.generateUnavailableHtml(error);
         }
+    }
+
+    /**
+     * Generate loading state HTML
+     */
+    private static generateLoadingHtml(): string {
+        const elapsedTime = this.loadingStartTime ? Date.now() - this.loadingStartTime : 0;
+        const showExtendedMessage = elapsedTime > 10000; // Show extended message after 10 seconds
+        
+        return `
+        <div class="usage-monitor loading">
+            <div class="monitor-header">
+                <h2>📊 Claude Usage Monitor</h2>
+                <div class="monitor-subtitle">Powered by ccusage</div>
+            </div>
+            
+            <div class="monitor-content">
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">
+                        <p><strong>Initializing ccusage...</strong></p>
+                        ${showExtendedMessage ? `
+                        <p class="loading-detail">This may take a moment on first run as ccusage is being downloaded.</p>
+                        <p class="loading-detail">Future loads will be much faster.</p>
+                        ` : `
+                        <p class="loading-detail">Loading usage statistics...</p>
+                        `}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        ${this.getStyles()}
+        ${this.getLoadingStyles()}`;
     }
 
     /**
@@ -458,6 +520,51 @@ export class UsageMonitor {
             
             .unavailable-actions button:hover {
                 background-color: var(--vscode-button-hoverBackground);
+            }
+        </style>`;
+    }
+
+    /**
+     * Generate loading-specific CSS styles
+     */
+    private static getLoadingStyles(): string {
+        return `
+        <style>
+            .loading-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 60px 20px;
+                text-align: center;
+            }
+            
+            .loading-spinner {
+                width: 50px;
+                height: 50px;
+                border: 4px solid var(--vscode-panel-border);
+                border-top: 4px solid var(--vscode-textLink-foreground);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-bottom: 20px;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            .loading-text {
+                color: var(--vscode-foreground);
+            }
+            
+            .loading-text p {
+                margin: 10px 0;
+            }
+            
+            .loading-detail {
+                color: var(--vscode-descriptionForeground);
+                font-size: 14px;
             }
         </style>`;
     }

@@ -105,12 +105,12 @@ export class CcusageService {
             {
                 runner: 'npx',
                 command: `npx ccusage@latest ${command}`,
-                errorHint: 'npx not found. Make sure Node.js is installed.'
+                errorHint: 'npx is downloading ccusage. This may take a moment on first run.'
             },
             {
                 runner: 'npm exec',
                 command: `npm exec --yes -- ccusage ${command}`,
-                errorHint: 'npm not found. Please install Node.js from https://nodejs.org'
+                errorHint: 'npm is downloading ccusage. This may take a moment on first run.'
             }
         ];
 
@@ -119,8 +119,9 @@ export class CcusageService {
         // Try each execution method in order
         for (const method of executionMethods) {
             try {
-                if (false) {
-                    console.log(`[CcusageService] Trying ${method.runner}...`);
+                // Log when trying npx/npm as they may be slow on first run
+                if (method.runner === 'npx' || method.runner === 'npm exec') {
+                    this.logger.debug(`Trying ${method.runner} - ${method.errorHint}`);
                 }
 
                 const { stdout, stderr } = await execAsync(method.command, {
@@ -133,13 +134,11 @@ export class CcusageService {
                     }
                 });
 
-                if (stderr && !stderr.includes('warning')) {
-                    console.warn(`[CcusageService] ${method.runner} stderr:`, stderr);
+                if (stderr && !stderr.includes('warning') && !stderr.includes('npm warn')) {
+                    this.logger.debug(`${method.runner} stderr:`, stderr);
                 }
 
-                if (false) {
-                    console.log(`[CcusageService] Success with ${method.runner}`);
-                }
+                this.logger.debug(`Successfully executed ccusage with ${method.runner}`);
                 return stdout.trim();
 
             } catch (error: any) {
@@ -147,9 +146,7 @@ export class CcusageService {
 
                 // Check if this is a command not found error
                 if (error.code === 'ENOENT' || error.message.includes('command not found')) {
-                    if (false) {
-                        console.log(`[CcusageService] ${method.runner} not available: ${method.errorHint}`);
-                    }
+                    this.logger.debug(`${method.runner} not available: ${method.errorHint}`);
                     continue; // Try next method
                 }
 
@@ -177,20 +174,28 @@ export class CcusageService {
                 }
 
                 // For other errors, continue to next method
-                if (false) {
-                    console.log(`[CcusageService] ${method.runner} failed:`, errorMessage);
-                }
+                this.logger.debug(`${method.runner} failed:`, errorMessage);
             }
         }
 
         // All methods failed
         const errorMessage = lastError ? (lastError.message || String(lastError)) : 'All execution methods failed';
+        
+        // Provide more helpful error message based on what went wrong
+        if (errorMessage.includes('ENOENT') || errorMessage.includes('command not found')) {
+            throw new Error(
+                `ccusage integration requires a package manager.\n\n` +
+                `Please install one of the following:\n` +
+                `1. Bun (recommended for speed): https://bun.sh\n` +
+                `2. Node.js (includes npm/npx): https://nodejs.org\n` +
+                `3. Bun VS Code Extension: Search for "Bun for Visual Studio Code" in Extensions`
+            );
+        }
+        
         throw new Error(
-            `ccusage unavailable. ${errorMessage}\n\n` +
-            `To use ccusage integration, please install one of:\n` +
-            `1. Bun (recommended): https://bun.sh\n` +
-            `2. Node.js: https://nodejs.org\n` +
-            `3. Bun VS Code Extension: Search for "Bun for Visual Studio Code" in Extensions`
+            `ccusage initialization failed: ${errorMessage}\n\n` +
+            `If this is your first time, ccusage may be downloading. Please wait and try again.\n` +
+            `For persistent issues, ensure you have Bun or Node.js installed.`
         );
     }
 
@@ -224,8 +229,8 @@ export class CcusageService {
 
             return data;
         } catch (error) {
-            // Always log errors as they're important for troubleshooting
-            console.error(`[CcusageService] Error executing '${command}':`, error instanceof Error ? error.message : String(error));
+            // Log errors for troubleshooting but don't spam the console
+            this.logger.debug(`Error executing '${command}':`, error instanceof Error ? error.message : String(error));
             throw error;
         }
     }
@@ -253,7 +258,7 @@ export class CcusageService {
             const result = await this.executeCcusage('blocks --json');
             return JSON.parse(result);
         } catch (error) {
-            console.error('[CcusageService] Error getting live usage:', error instanceof Error ? error.message : String(error));
+            this.logger.debug('Error getting live usage:', error instanceof Error ? error.message : String(error));
             throw error;
         }
     }
@@ -319,7 +324,7 @@ export class CcusageService {
             const result = await this.executeCcusage('blocks --json --active');
             return JSON.parse(result);
         } catch (error) {
-            console.error('[CcusageService] Error getting active session usage:', error instanceof Error ? error.message : String(error));
+            this.logger.debug('Error getting active session usage:', error instanceof Error ? error.message : String(error));
             throw error;
         }
     }
@@ -406,7 +411,7 @@ export class CcusageService {
                 recentDays
             };
         } catch (error) {
-            console.error('[CcusageService] Error getting today usage:', error instanceof Error ? error.message : String(error));
+            this.logger.debug('Error getting today usage:', error instanceof Error ? error.message : String(error));
             throw error;
         }
     }

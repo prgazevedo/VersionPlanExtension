@@ -287,6 +287,14 @@ For security issues, please report them privately via GitHub's security advisory
 
 ## Changelog
 
+### v3.3.3 - ccusage Loading Experience Improvements
+- **🚀 Improved Loading State**: Added immediate loading spinner for ccusage initialization
+- **📊 Progressive Feedback**: Shows "Initializing ccusage..." with extended message after 10 seconds
+- **🔧 Better Error Messages**: Clearer feedback when npx/npm is downloading ccusage package
+- **✨ Smoother UX**: Users now understand why initial load takes time (package download)
+- **🎨 Theme-Aware Loading**: Beautiful loading animation that matches VS Code theme
+- **📝 Enhanced Logging**: Improved debug logging for troubleshooting ccusage integration
+
 ### v3.3.2 - Codebase Maintenance & ccusage Integration Stability Release
 - **🧹 Code Cleanup**: Removed experimental and incomplete features, focused on core stable functionality
 - **🔧 ccusage Integration**: Maintained and stabilized ccusage CLI integration for accurate usage tracking
