@@ -50,13 +50,20 @@ export interface ConversationSummary {
     filePath: string;
     firstMessage?: string;
     lastMessage?: string;
+    // 🆕 Cloud sync support
+    isFromCloud?: boolean;
+    cloudSyncMetadata?: any;
 }
 
 export interface ConversationFilter {
     projectPath?: string;
+    projectName?: string;
     dateFrom?: Date;
     dateTo?: Date;
     searchText?: string;
     messageType?: 'user' | 'assistant' | 'all';
+    minMessages?: number;
+    maxMessages?: number;
+    minDuration?: number; // in minutes
 }
 

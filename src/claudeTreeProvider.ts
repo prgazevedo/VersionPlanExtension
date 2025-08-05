@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs-extra';
-import { TokenTracker } from './tokenTracker';
 
 export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ClaudeTreeItem | undefined | null | void> = new vscode.EventEmitter<ClaudeTreeItem | undefined | null | void>();
@@ -88,34 +87,38 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             ));
         }
 
-        // Export all conversations action
+        // Cloud sync action (replaces export all conversations)
         items.push(new ClaudeTreeItem(
-            'Export All Conversations',
+            'Sync to Cloud',
             vscode.TreeItemCollapsibleState.None,
             {
-                command: 'claude-config.exportAllConversations',
-                title: 'Export All Conversations',
+                command: 'claude-config.syncToCloud',
+                title: 'Sync to Cloud',
                 arguments: []
             },
-            'export'
+            'cloud-upload'
+        ));
+
+        // Cloud settings action
+        items.push(new ClaudeTreeItem(
+            'Cloud Settings',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.openCloudSettings',
+                title: 'Open Cloud Settings',
+                arguments: []
+            },
+            'settings-gear'
         ));
 
         // Usage statistics section
-        try {
-            const tokenTracker = TokenTracker.getInstance();
-            const stats = tokenTracker.getStatistics();
-            
-            items.push(new ClaudeTreeItem(
-                'Usage Statistics',
-                vscode.TreeItemCollapsibleState.Collapsed,
-                undefined,
-                'graph',
-                'section'
-            ));
-        } catch (error) {
-            // TokenTracker not initialized yet, skip usage statistics section
-            console.log('TokenTracker not available for tree provider');
-        }
+        items.push(new ClaudeTreeItem(
+            'Usage Statistics',
+            vscode.TreeItemCollapsibleState.Collapsed,
+            undefined,
+            'graph',
+            'section'
+        ));
 
         return items;
     }
@@ -123,90 +126,26 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
     private getUsageStatisticsChildren(): ClaudeTreeItem[] {
         const items: ClaudeTreeItem[] = [];
         
-        try {
-            const tokenTracker = TokenTracker.getInstance();
-            const stats = tokenTracker.getStatistics();
-            const usageStatus = tokenTracker.getUsageStatus();
-            const percentage = tokenTracker.getCurrentUsagePercentage();
-            const resetTime = tokenTracker.getTimeUntilReset();
-
-        // Current usage percentage (main feature)
-        const percentageIcon = usageStatus === 'critical' ? 'error' : 
-                              usageStatus === 'warning' ? 'warning' : 'graph';
-        
+        // ccusage-powered usage statistics
         items.push(new ClaudeTreeItem(
-            `Weekly Usage: ${percentage.toFixed(1)}%`,
+            'ccusage Integration',
             vscode.TreeItemCollapsibleState.None,
             {
-                command: 'claude-config.viewUsageStats',
-                title: 'View Detailed Statistics',
+                command: 'claude-config.debugCcusage',
+                title: 'Test ccusage Integration',
                 arguments: []
             },
-            percentageIcon,
-            'percentage'
-        ));
-
-        // Reset time information
-        const resetText = resetTime.days > 0 ? 
-            `${resetTime.days}d ${resetTime.hours}h` : 
-            `${resetTime.hours}h ${resetTime.minutes}m`;
-        
-        items.push(new ClaudeTreeItem(
-            `Resets in: ${resetText}`,
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.viewUsageStats',
-                title: 'View Detailed Statistics',
-                arguments: []
-            },
-            'clock',
-            'reset-time'
-        ));
-
-        // Total usage summary
-        items.push(new ClaudeTreeItem(
-            `Total: ${stats.totalTokens.toLocaleString()} tokens`,
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.viewUsageStats',
-                title: 'View Detailed Statistics',
-                arguments: []
-            },
-            'info',
-            'stat'
-        ));
-
-        items.push(new ClaudeTreeItem(
-            `Cost: $${stats.totalCost.toFixed(2)}`,
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.viewUsageStats',
-                title: 'View Detailed Statistics',
-                arguments: []
-            },
-            'credit-card',
-            'stat'
-        ));
-
-        items.push(new ClaudeTreeItem(
-            `Operations: ${stats.operationCount.toLocaleString()}`,
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.viewUsageStats',
-                title: 'View Detailed Statistics',
-                arguments: []
-            },
-            'pulse',
-            'stat'
+            'graph',
+            'ccusage-status'
         ));
 
         // Quick actions
         items.push(new ClaudeTreeItem(
-            'View Detailed Report',
+            'View Usage Report',
             vscode.TreeItemCollapsibleState.None,
             {
                 command: 'claude-config.viewUsageStats',
-                title: 'View Detailed Statistics',
+                title: 'View ccusage Statistics',
                 arguments: []
             },
             'graph-line',
@@ -214,21 +153,41 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         ));
 
         items.push(new ClaudeTreeItem(
-            'Reset Statistics',
+            'Quick Usage Summary',
             vscode.TreeItemCollapsibleState.None,
             {
-                command: 'claude-config.resetUsageStats',
-                title: 'Reset Usage Statistics',
+                command: 'claude-config.showUsageQuickPick',
+                title: 'Show Usage Summary',
                 arguments: []
             },
-            'refresh',
+            'list-selection',
             'action'
         ));
 
-        } catch (error) {
-            // TokenTracker not initialized yet, return empty items
-            console.log('TokenTracker not available for usage statistics children');
-        }
+        items.push(new ClaudeTreeItem(
+            'ccusage Setup Help',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.installCcusageHelp',
+                title: 'Install ccusage',
+                arguments: []
+            },
+            'info',
+            'action'
+        ));
+
+        // Add cloud sync status (simplified for tree view)
+        items.push(new ClaudeTreeItem(
+            'Cloud Sync',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.openCloudSettings',
+                title: 'Configure Cloud Sync',
+                arguments: []
+            },
+            'cloud',
+            'cloud-status'
+        ));
 
         return items;
     }

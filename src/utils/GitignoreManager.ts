@@ -1,6 +1,11 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+
+interface GitignoreComplianceCheck {
+    hasGitignore: boolean;
+    hasClaudeRules: boolean;
+    missingRules: string[];
+}
 
 export class GitignoreManager {
     private static readonly CLAUDE_GITIGNORE_RULES = [
@@ -38,9 +43,11 @@ export class GitignoreManager {
             }
             
             // Append our rules
-            const newContent = content + (content.endsWith('\n') ? '' : '\n') + this.CLAUDE_GITIGNORE_RULES.join('\n');
-            await fs.writeFile(gitignorePath, newContent, 'utf8');
+            const newContent = content + 
+                (content.endsWith('\n') ? '' : '\n') + 
+                this.CLAUDE_GITIGNORE_RULES.join('\n');
             
+            await fs.writeFile(gitignorePath, newContent, 'utf8');
             return true; // Rules were added
         } catch (error) {
             console.error('Failed to update .gitignore:', error);
@@ -53,7 +60,7 @@ export class GitignoreManager {
             '.claude/.chats/',
             '.claude/settings.local.json'
         ];
-        
+
         const violations: string[] = [];
         
         for (const file of files) {
@@ -63,19 +70,15 @@ export class GitignoreManager {
                 }
             }
         }
-        
+
         return violations;
     }
 
-    static async checkGitignoreCompliance(workspacePath: string): Promise<{
-        hasGitignore: boolean;
-        hasClaudeRules: boolean;
-        missingRules: string[];
-    }> {
+    static async checkGitignoreCompliance(workspacePath: string): Promise<GitignoreComplianceCheck> {
         try {
             const gitignorePath = path.join(workspacePath, '.gitignore');
             const hasGitignore = await fs.pathExists(gitignorePath);
-            
+
             if (!hasGitignore) {
                 return {
                     hasGitignore: false,
@@ -83,10 +86,10 @@ export class GitignoreManager {
                     missingRules: ['.claude/.chats/', '.claude/settings.local.json']
                 };
             }
-            
+
             const content = await fs.readFile(gitignorePath, 'utf8');
             const hasClaudeRules = content.includes(this.GITIGNORE_MARKER);
-            
+
             const missingRules: string[] = [];
             if (!content.includes('.claude/.chats/')) {
                 missingRules.push('.claude/.chats/');
@@ -94,7 +97,7 @@ export class GitignoreManager {
             if (!content.includes('.claude/settings.local.json')) {
                 missingRules.push('.claude/settings.local.json');
             }
-            
+
             return {
                 hasGitignore,
                 hasClaudeRules,

@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
 import { ConversationManager } from './ConversationManager';
 import { ConversationSummary } from './types';
-import { TokenTracker } from '../tokenTracker';
+// TokenTracker removed - using ccusage integration
+import { SummaryCacheManager } from './SummaryCache';
 
 export class ConversationTreeProvider implements vscode.TreeDataProvider<ConversationItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ConversationItem | undefined | null | void> = new vscode.EventEmitter<ConversationItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<ConversationItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private conversations: ConversationSummary[] = [];
+    private summaryCache = SummaryCacheManager.getInstance();
+    private searchFilter: string = '';
+    private isLoading = false;
 
     constructor(private conversationManager: ConversationManager) {
         this.refresh();
@@ -24,12 +28,47 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
         });
     }
 
+    /**
+     * Fast refresh using cached summaries only
+     */
+    refreshFromCache(): void {
+        this.conversations = this.summaryCache.getAll();
+        this._onDidChangeTreeData.fire();
+    }
+
+    /**
+     * Set search filter for conversations
+     */
+    setSearchFilter(filter: string): void {
+        this.searchFilter = filter.toLowerCase();
+        this._onDidChangeTreeData.fire();
+    }
+
+    /**
+     * Clear search filter
+     */
+    clearSearchFilter(): void {
+        this.searchFilter = '';
+        this._onDidChangeTreeData.fire();
+    }
+
     private async loadConversations(): Promise<void> {
         try {
+            this.isLoading = true;
+            // Try cache first for immediate display
+            const cached = this.summaryCache.getAll();
+            if (cached.length > 0) {
+                this.conversations = cached;
+                this._onDidChangeTreeData.fire(); // Show cached data immediately
+            }
+            
+            // Load fresh data in background
             this.conversations = await this.conversationManager.getAvailableConversations();
+            this.isLoading = false;
         } catch (error) {
             console.error('Error loading conversations for tree view:', error);
             this.conversations = [];
+            this.isLoading = false;
         }
     }
 
@@ -39,18 +78,45 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
 
     async getChildren(element?: ConversationItem): Promise<ConversationItem[]> {
         if (!element) {
+            // Show loading indicator if needed
+            if (this.isLoading && this.conversations.length === 0) {
+                return [new ConversationItem(
+                    'Loading conversations...',
+                    'Please wait',
+                    vscode.TreeItemCollapsibleState.None,
+                    'loading'
+                )];
+            }
+
+            // Apply search filter if active
+            const filteredConversations = this.searchFilter ? 
+                this.conversations.filter(conv => this.matchesSearchFilter(conv)) : 
+                this.conversations;
+
             // Root level - group conversations by project
-            const projectGroups = this.groupConversationsByProject();
-            return Object.keys(projectGroups).map(projectName => {
+            const projectGroups = this.groupConversationsByProject(filteredConversations);
+            const projectItems = Object.keys(projectGroups).map(projectName => {
                 const conversations = projectGroups[projectName];
+                const totalMessages = conversations.reduce((sum, conv) => sum + conv.messageCount, 0);
+                const description = this.searchFilter ? 
+                    `${conversations.length}/${this.conversations.filter(c => c.projectName === projectName).length} conversations` :
+                    `${conversations.length} conversation${conversations.length === 1 ? '' : 's'} • ${totalMessages} messages`;
+                
                 return new ConversationItem(
                     projectName,
-                    `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`,
+                    description,
                     vscode.TreeItemCollapsibleState.Collapsed,
                     'project',
                     undefined,
                     conversations
                 );
+            });
+
+            // Sort projects by most recent activity
+            return projectItems.sort((a, b) => {
+                const aLatest = Math.max(...(a.conversations || []).map(c => new Date(c.startTime).getTime()));
+                const bLatest = Math.max(...(b.conversations || []).map(c => new Date(c.startTime).getTime()));
+                return bLatest - aLatest;
             });
         } else if (element.type === 'project' && element.conversations) {
             // Project level - show conversations
@@ -70,10 +136,11 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
         return [];
     }
 
-    private groupConversationsByProject(): { [projectName: string]: ConversationSummary[] } {
+    private groupConversationsByProject(conversations?: ConversationSummary[]): { [projectName: string]: ConversationSummary[] } {
+        const conversationsToGroup = conversations || this.conversations;
         const groups: { [projectName: string]: ConversationSummary[] } = {};
         
-        for (const conversation of this.conversations) {
+        for (const conversation of conversationsToGroup) {
             const projectName = conversation.projectName;
             if (!groups[projectName]) {
                 groups[projectName] = [];
@@ -81,7 +148,28 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
             groups[projectName].push(conversation);
         }
 
+        // Sort conversations within each project by start time (newest first)
+        for (const projectName in groups) {
+            groups[projectName].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+        }
+
         return groups;
+    }
+
+    /**
+     * Check if conversation matches current search filter
+     */
+    private matchesSearchFilter(conversation: ConversationSummary): boolean {
+        if (!this.searchFilter) return true;
+        
+        const searchTerms = [
+            conversation.projectName,
+            conversation.firstMessage || '',
+            conversation.lastMessage || '',
+            conversation.duration || ''
+        ].map(term => term.toLowerCase());
+        
+        return searchTerms.some(term => term.includes(this.searchFilter));
     }
 
     private formatConversationLabel(conversation: ConversationSummary): string {
@@ -102,16 +190,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     }
 
     private formatConversationDescription(conversation: ConversationSummary): string {
-        try {
-            const tokenTracker = TokenTracker.getInstance();
-            const usage = tokenTracker.getConversationUsage(conversation.sessionId);
-            
-            if (usage && usage.totalTokens > 0) {
-                return `${conversation.messageCount} messages • ${usage.totalTokens.toLocaleString()} tokens • $${usage.totalCost.toFixed(2)}`;
-            }
-        } catch (error) {
-            // TokenTracker not available, fall back to basic description
-        }
+        // TokenTracker removed - using basic description only
         
         return `${conversation.messageCount} messages`;
     }
@@ -126,7 +205,7 @@ export class ConversationItem extends vscode.TreeItem {
         public readonly label: string,
         public readonly description: string,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly type: 'project' | 'conversation',
+        public readonly type: 'project' | 'conversation' | 'loading',
         public readonly conversationSummary?: ConversationSummary,
         public readonly conversations?: ConversationSummary[]
     ) {
@@ -141,11 +220,27 @@ export class ConversationItem extends vscode.TreeItem {
                 title: 'View Conversation',
                 arguments: [conversationSummary]
             };
-            this.iconPath = new vscode.ThemeIcon('comment-discussion');
+            // Enhanced icons based on conversation properties
+            const messageCount = conversationSummary.messageCount;
+            if (messageCount > 100) {
+                this.iconPath = new vscode.ThemeIcon('comment-discussion', new vscode.ThemeColor('charts.red'));
+            } else if (messageCount > 50) {
+                this.iconPath = new vscode.ThemeIcon('comment-discussion', new vscode.ThemeColor('charts.orange'));
+            } else if (messageCount > 20) {
+                this.iconPath = new vscode.ThemeIcon('comment-discussion', new vscode.ThemeColor('charts.yellow'));
+            } else {
+                this.iconPath = new vscode.ThemeIcon('comment-discussion', new vscode.ThemeColor('charts.green'));
+            }
+            
             this.tooltip = this.createConversationTooltip(conversationSummary);
         } else if (type === 'project') {
             this.iconPath = new vscode.ThemeIcon('folder');
-            this.tooltip = `Project: ${label}`;
+            const conversationCount = conversations?.length || 0;
+            const totalMessages = conversations?.reduce((sum, conv) => sum + conv.messageCount, 0) || 0;
+            this.tooltip = `Project: ${label}\n${conversationCount} conversations\n${totalMessages} total messages`;
+        } else if (type === 'loading') {
+            this.iconPath = new vscode.ThemeIcon('loading~spin');
+            this.tooltip = 'Loading conversations from cache and files...';
         }
     }
 
@@ -160,29 +255,7 @@ Ended: ${endTime}
 Duration: ${conversation.duration || 'Unknown'}
 Messages: ${conversation.messageCount}`;
 
-        try {
-            const tokenTracker = TokenTracker.getInstance();
-            const usage = tokenTracker.getConversationUsage(conversation.sessionId);
-        
-            if (usage && usage.totalTokens > 0) {
-            tooltip += `
-
-Token Usage:
-• Total: ${usage.totalTokens.toLocaleString()} tokens
-• Cost: $${usage.totalCost.toFixed(2)}
-• Input: ${usage.inputTokens.toLocaleString()}
-• Output: ${usage.outputTokens.toLocaleString()}`;
-            
-            if (usage.cacheCreationTokens > 0) {
-                tooltip += `\n• Cache Creation: ${usage.cacheCreationTokens.toLocaleString()}`;
-            }
-            if (usage.cacheReadTokens > 0) {
-                tooltip += `\n• Cache Read: ${usage.cacheReadTokens.toLocaleString()}`;
-            }
-            }
-        } catch (error) {
-            // TokenTracker not available, skip usage information
-        }
+        // TokenTracker removed - usage information now provided by ccusage integration
 
         tooltip += `\n\nFirst message: ${conversation.firstMessage || 'No content'}`;
         

@@ -295,6 +295,36 @@ export class ConversationViewer {
         .collapse-icon.expanded {
             transform: rotate(90deg);
         }
+        
+        /* Message type color coding - full line background colors */
+        .request-header.user-prompt {
+            background-color: transparent;  /* White/transparent background for user prompts */
+        }
+        .request-header.claude-response {
+            background-color: var(--vscode-editor-selectionHighlightBackground);
+            border-left: 4px solid var(--vscode-charts-green);
+        }
+        .request-header.tool-use,
+        .request-header.tool-result,
+        .request-header.system-prompt,
+        .request-header.claude-internal {
+            background-color: rgba(0, 122, 204, 0.1);
+            border-left: 4px solid var(--vscode-charts-blue);
+        }
+        
+        /* Hover states */
+        .request-header.user-prompt:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .request-header.claude-response:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .request-header.tool-use:hover,
+        .request-header.tool-result:hover,
+        .request-header.system-prompt:hover,
+        .request-header.claude-internal:hover {
+            background-color: rgba(0, 122, 204, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -314,24 +344,24 @@ export class ConversationViewer {
                     <span class="metadata-value">${conversationSummary.duration || 'Unknown'}</span>
                 </div>
                 <div class="metadata-item short">
-                    <span class="metadata-label">Messages:</span>
-                    <span class="metadata-value">${conversationSummary.messageCount || 0}</span>
+                    <span class="metadata-label">Messages/Tokens:</span>
+                    <span class="metadata-value">${metadata.totalMessages}/${metadata.totalTokens.toLocaleString()}</span>
                 </div>
                 <div class="metadata-item short">
                     <span class="metadata-label">Started:</span>
-                    <span class="metadata-value">${new Date(conversationSummary.startTime).toLocaleString()}</span>
+                    <span class="metadata-value">${this.formatDate(conversationSummary.startTime)}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Model:</span>
+                    <span class="metadata-value">${metadata.model}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Ended:</span>
+                    <span class="metadata-value">${conversationSummary.endTime ? this.formatDate(conversationSummary.endTime) : 'Ongoing'}</span>
                 </div>
                 <div class="metadata-item short">
                     <span class="metadata-label">Service Tier:</span>
                     <span class="metadata-value">${sessionMetadata.serviceTier}</span>
-                </div>
-                <div class="metadata-item short">
-                    <span class="metadata-label">Ended:</span>
-                    <span class="metadata-value">${conversationSummary.endTime ? new Date(conversationSummary.endTime).toLocaleString() : 'Ongoing'}</span>
-                </div>
-                <div class="metadata-item short">
-                    <span class="metadata-label">Version:</span>
-                    <span class="metadata-value">${sessionMetadata.version}</span>
                 </div>
             </div>
             
@@ -628,6 +658,96 @@ export class ConversationViewer {
 </html>`;
     }
 
+    private categorizeMessage(message: ConversationMessage): { role: string, colorClass: string } {
+        const content = this.extractDetailedContent(message.message?.content);
+        const messageRole = message.message?.role;
+        const topLevelType = message.type;
+        const isInternal = message.isMeta || message.uuid?.includes('system') || false;
+        
+        // **ENHANCED RELIABLE APPROACH**: Use the JSONL structure indicators with better fallbacks
+        
+        // 1. Check for tool results first (these have type='user' but contain tool_result objects)
+        if (message.message?.content && Array.isArray(message.message.content)) {
+            for (const item of message.message.content) {
+                if (item && item.type === 'tool_result') {
+                    return { role: 'Claude Internal: Tool Result', colorClass: 'claude-internal' };
+                }
+                if (item && item.type === 'tool_use' && item.name) {
+                    return { role: `Claude Internal: ${item.name}`, colorClass: 'claude-internal' };
+                }
+            }
+        }
+        
+        // 2. Check content patterns that indicate this is NOT a user prompt
+        // even if role='user' (handles cases where tool outputs get mislabeled)
+        if (content) {
+            // Check for numbered list pattern that indicates structured output
+            if (/^\d+→/.test(content.trim())) {
+                return { role: 'Claude Response', colorClass: 'claude-response' };
+            }
+            
+            // Check for tool patterns in content
+            if (content.includes('[Tool:') || content.includes('[Tool Result]')) {
+                const toolMatch = content.match(/\[Tool: (\w+)\]/);
+                if (toolMatch && toolMatch[1]) {
+                    return { role: `Claude Internal: ${toolMatch[1]}`, colorClass: 'claude-internal' };
+                }
+                return { role: 'Claude Internal: Tool Usage', colorClass: 'claude-internal' };
+            }
+        }
+        
+        // 3. Use message.role as indicator (but not definitive for 'user' role)
+        if (messageRole === 'user') {
+            // This is likely a genuine user prompt, but we've already checked for exceptions above
+            return { role: 'User Prompt', colorClass: 'user-prompt' };
+        }
+        
+        if (messageRole === 'assistant') {
+            // Check if this is a tool usage within an assistant message
+            if (message.message?.content && Array.isArray(message.message.content)) {
+                for (const item of message.message.content) {
+                    if (item && item.type === 'tool_use' && item.name) {
+                        return { role: `Claude Internal: ${item.name}`, colorClass: 'claude-internal' };
+                    }
+                }
+            }
+            
+            // Look for tool usage patterns in content for backward compatibility
+            const toolPatterns = [
+                /\[Tool: (\w+)\]/,
+                /<function_calls>[\s\S]*?<invoke name="(\w+)">/
+            ];
+            
+            for (const pattern of toolPatterns) {
+                const toolMatch = content.match(pattern);
+                if (toolMatch && toolMatch[1]) {
+                    return { role: `Claude Internal: ${toolMatch[1]}`, colorClass: 'claude-internal' };
+                }
+            }
+            
+            return { role: 'Claude Response', colorClass: 'claude-response' };
+        }
+        
+        // 3. Handle system/internal messages
+        if (isInternal) {
+            return { role: 'System Prompt', colorClass: 'system-prompt' };
+        }
+        
+        // 4. Enhanced fallback: only use topLevelType if message.role is missing/undefined
+        if (!messageRole) {
+            if (topLevelType === 'user') {
+                return { role: 'User Prompt', colorClass: 'user-prompt' };
+            }
+            
+            if (topLevelType === 'assistant') {
+                return { role: 'Claude Response', colorClass: 'claude-response' };
+            }
+        }
+        
+        // 5. Final fallback - should rarely be reached
+        return { role: 'Unknown', colorClass: 'claude-internal' };
+    }
+
     private extractDetailedContent(content: any): string {
         // Handle missing or null content
         if (!content) {
@@ -662,37 +782,53 @@ export class ConversationViewer {
 
 
     private generateGroupedConversationHTML(messages: ConversationMessage[]): string {
-        const requestGroups: { [requestId: string]: ConversationMessage[] } = {};
+        let html = '';
+        let segmentCounter = 0;
         
-        // Group messages by request ID
-        messages.forEach(message => {
-            const requestId = message.requestId || `solo-${message.uuid}`;
-            if (!requestGroups[requestId]) {
-                requestGroups[requestId] = [];
+        // Filter out invalid messages before processing
+        const validMessages = messages.filter(message => {
+            // Must have timestamp
+            if (!message.timestamp || message.timestamp === 'Invalid Date') {
+                console.warn('Skipping message with invalid timestamp:', message);
+                return false;
             }
-            requestGroups[requestId].push(message);
+            
+            // Must have valid date
+            const date = new Date(message.timestamp);
+            if (isNaN(date.getTime())) {
+                console.warn('Skipping message with unparseable timestamp:', message.timestamp);
+                return false;
+            }
+            
+            // Must have message content structure
+            if (!message.message || message.message.content === undefined) {
+                console.warn('Skipping message without content structure:', message);
+                return false;
+            }
+            
+            return true;
         });
         
-        let html = '';
-        Object.entries(requestGroups).forEach(([requestId, groupMessages]) => {
-            const firstMessage = groupMessages[0];
-            const isInternalMessage = firstMessage.isMeta || firstMessage.uuid?.includes('system') || false;
-            let role = firstMessage.type === 'user' ? 'User Prompt' : 'Claude Response';
-            if (isInternalMessage) {
-                role = firstMessage.type === 'user' ? 'System Prompt' : 'Claude Internal';
+        validMessages.forEach(message => {
+            const messageId = `message-${segmentCounter++}`;
+            
+            const date = new Date(message.timestamp);
+            let timestamp = 'Unknown Time';
+            
+            if (!isNaN(date.getTime())) {
+                const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+                timestamp = `${timeStr}/${dateStr}`;
             }
             
-            const date = new Date(firstMessage.timestamp);
-            const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-            const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-            const timestamp = `${timeStr}:${dateStr}`;
+            // Get message categorization and content
+            const { role, colorClass } = this.categorizeMessage(message);
+            const content = this.extractDetailedContent(message.message?.content);
             
             const messageMetadata = [];
-            if (firstMessage.message?.model) messageMetadata.push(`Model: ${firstMessage.message.model}`);
-            if (firstMessage.userType) messageMetadata.push(`UserType: ${firstMessage.userType}`);
             
             // Add token usage information if available
-            const usage = firstMessage.message?.usage;
+            const usage = message.message?.usage;
             if (usage && (usage.input_tokens || usage.output_tokens)) {
                 const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0) + 
                                   (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
@@ -714,27 +850,24 @@ export class ConversationViewer {
             
             const metadataStr = messageMetadata.length > 0 ? ` [${messageMetadata.join(', ')}]` : '';
             
-            html += `<div class="request-header" onclick="toggleRequest('${requestId}')">
-                <span class="collapse-icon" id="icon-${requestId}">▶</span>
+            html += `<div class="request-header ${colorClass}" onclick="toggleRequest('${messageId}')">
+                <span class="collapse-icon" id="icon-${messageId}">▶</span>
                 <span>${timestamp} - ${role}${metadataStr}</span>
             </div>
-            <div class="request-content" id="content-${requestId}">`;
+            <div class="request-content" id="content-${messageId}">`;
             
-            groupMessages.forEach(message => {
-                const content = this.extractDetailedContent(message.message?.content);
-                if (content.trim()) {
-                    // Clean up content: remove excessive whitespace and blank lines
-                    const cleanedContent = content
-                        .split('\n')
-                        .map(line => line.trim())
-                        .filter(line => line.length > 0)
-                        .join('\n');
-                    
-                    if (cleanedContent) {
-                        html += `<div class="message-content">${this.escapeHtml(cleanedContent)}</div>`;
-                    }
+            if (content && content.trim()) {
+                // Clean up content: remove excessive whitespace and blank lines
+                const cleanedContent = content
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .join('\n');
+                
+                if (cleanedContent) {
+                    html += `<div class="message-content">${this.escapeHtml(cleanedContent)}</div>`;
                 }
-            });
+            }
             
             html += `</div>`;
         });
@@ -742,12 +875,17 @@ export class ConversationViewer {
         return html;
     }
 
+    // Removed segmentMessageContent method - messages are no longer split into segments
+
     private extractConversationMetadata(messages: ConversationMessage[]): any {
         const metadata = {
             version: 'Unknown',
             gitBranch: 'Unknown', 
             serviceTier: 'Unknown',
-            cwd: 'Unknown'
+            cwd: 'Unknown',
+            model: 'Unknown',
+            totalTokens: 0,
+            totalMessages: messages.length
         };
 
         // Search through all messages for metadata
@@ -764,17 +902,57 @@ export class ConversationViewer {
             if (message.message?.usage?.service_tier && metadata.serviceTier === 'Unknown') {
                 metadata.serviceTier = message.message.usage.service_tier;
             }
+            if (message.message?.model && metadata.model === 'Unknown') {
+                metadata.model = message.message.model;
+            }
             
-            // Stop early if we found everything
+            // Sum up token usage
+            const usage = message.message?.usage;
+            if (usage) {
+                metadata.totalTokens += (usage.input_tokens || 0) + 
+                                      (usage.output_tokens || 0) + 
+                                      (usage.cache_creation_input_tokens || 0) + 
+                                      (usage.cache_read_input_tokens || 0);
+            }
+            
+            // Stop early if we found everything except tokens (which we need to sum)
             if (metadata.version !== 'Unknown' && 
                 metadata.gitBranch !== 'Unknown' && 
                 metadata.serviceTier !== 'Unknown' && 
-                metadata.cwd !== 'Unknown') {
-                break;
+                metadata.cwd !== 'Unknown' &&
+                metadata.model !== 'Unknown') {
+                // Continue to count tokens but don't need to check other metadata
             }
         }
 
         return metadata;
+    }
+
+    private formatDate(dateString: string): string {
+        if (!dateString) {
+            return 'Unknown';
+        }
+        
+        try {
+            const date = new Date(dateString);
+            
+            // Check if the date is valid
+            if (isNaN(date.getTime())) {
+                // Try parsing as timestamp if it's a number
+                const timestamp = parseInt(dateString);
+                if (!isNaN(timestamp)) {
+                    const timestampDate = new Date(timestamp);
+                    if (!isNaN(timestampDate.getTime())) {
+                        return timestampDate.toLocaleString();
+                    }
+                }
+                return 'Invalid Date';
+            }
+            
+            return date.toLocaleString();
+        } catch (error) {
+            return 'Invalid Date';
+        }
     }
 
     private escapeHtml(text: string): string {
@@ -850,20 +1028,25 @@ export class ConversationViewer {
         let markdown = `# Claude Conversation\n\n`;
         markdown += `**Session ID:** ${conversation.sessionId}\n`;
         markdown += `**Project:** ${conversation.projectPath}\n`;
-        markdown += `**Started:** ${new Date(conversation.startTime).toLocaleString()}\n`;
-        markdown += `**Ended:** ${conversation.endTime ? new Date(conversation.endTime).toLocaleString() : 'Ongoing'}\n`;
+        markdown += `**Started:** ${this.formatDate(conversation.startTime)}\n`;
+        markdown += `**Ended:** ${conversation.endTime ? this.formatDate(conversation.endTime) : 'Ongoing'}\n`;
         markdown += `**Messages:** ${conversation.messageCount}\n\n`;
 
         conversation.messages.forEach((message) => {
             const date = new Date(message.timestamp);
-            const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-            const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-            const timestamp = `${timeStr}:${dateStr}`;
+            let timestamp = 'Unknown Time';
             
-            const role = message.type === 'user' ? 'User Prompt' : 'Claude Response';
+            if (!isNaN(date.getTime())) {
+                const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+                timestamp = `${timeStr}:${dateStr}`;
+            }
+            
+            // Get message categorization and content directly
+            const { role } = this.categorizeMessage(message);
+            const content = this.extractDetailedContent(message.message?.content);
+            
             const messageMetadata = [];
-            if (message.message?.model) messageMetadata.push(`Model: ${message.message.model}`);
-            if (message.userType) messageMetadata.push(`UserType: ${message.userType}`);
             
             // Add token usage information if available
             const usage = message.message?.usage;
@@ -890,8 +1073,7 @@ export class ConversationViewer {
             
             markdown += `## ${timestamp} - ${role}${metadataStr}\n\n`;
             
-            const content = this.extractDetailedContent(message.message.content);
-            if (content.trim()) {
+            if (content && content.trim()) {
                 markdown += `\`\`\`\n${content}\n\`\`\`\n\n`;
             }
             
@@ -905,21 +1087,26 @@ export class ConversationViewer {
         let text = `Claude Conversation\n`;
         text += `Session ID: ${conversation.sessionId}\n`;
         text += `Project: ${conversation.projectPath}\n`;
-        text += `Started: ${new Date(conversation.startTime).toLocaleString()}\n`;
-        text += `Ended: ${conversation.endTime ? new Date(conversation.endTime).toLocaleString() : 'Ongoing'}\n`;
+        text += `Started: ${this.formatDate(conversation.startTime)}\n`;
+        text += `Ended: ${conversation.endTime ? this.formatDate(conversation.endTime) : 'Ongoing'}\n`;
         text += `Messages: ${conversation.messageCount}\n\n`;
         text += '='.repeat(50) + '\n\n';
 
         conversation.messages.forEach((message) => {
             const date = new Date(message.timestamp);
-            const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-            const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-            const timestamp = `${timeStr}:${dateStr}`;
+            let timestamp = 'Unknown Time';
             
-            const role = message.type === 'user' ? 'User Prompt' : 'Claude Response';
+            if (!isNaN(date.getTime())) {
+                const timeStr = date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const dateStr = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+                timestamp = `${timeStr}:${dateStr}`;
+            }
+            
+            // Get message categorization and content directly
+            const { role } = this.categorizeMessage(message);
+            const content = this.extractDetailedContent(message.message?.content);
+            
             const messageMetadata = [];
-            if (message.message?.model) messageMetadata.push(`Model: ${message.message.model}`);
-            if (message.userType) messageMetadata.push(`UserType: ${message.userType}`);
             
             // Add token usage information if available
             const usage = message.message?.usage;
@@ -946,8 +1133,7 @@ export class ConversationViewer {
             
             text += `${timestamp} - ${role}${metadataStr}\n`;
             
-            const content = this.extractDetailedContent(message.message.content);
-            if (content.trim()) {
+            if (content && content.trim()) {
                 text += `${content}\n\n`;
             }
             

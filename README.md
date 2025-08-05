@@ -1,6 +1,6 @@
 # Claude Config Manager
 
-A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md configuration management, conversation history browsing, and intelligent project planning with Git integration.
+A comprehensive VSCode extension for Claude Code workflows, featuring CLAUDE.md configuration management, conversation history browsing, intelligent project planning with Git integration, ccusage-powered usage tracking, and WebDAV cloud synchronization.
 
 ## Features
 
@@ -27,7 +27,32 @@ A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md 
 - **Template-Based**: Pre-structured project plan template covering architecture, setup, and workflows
 - **Manual Override**: Manual command available if automatic rule addition is needed
 
+### 📊 ccusage-Powered Usage Tracking
+- **Accurate Usage Data**: Powered by [ccusage](https://github.com/ryoppippi/ccusage) for reliable Claude Code usage tracking
+- **Real-Time Statistics**: Today's tokens, costs, and model usage with automatic refresh
+- **Token Breakdown**: Detailed breakdown of input, output, cache creation, and cache read tokens
+- **Model Detection**: Automatic detection of Claude models used (Opus, Sonnet, etc.)
+- **Smart Installation**: Automatic fallback across package managers (bunx → npx → npm exec)
+- **User-Friendly Setup**: Built-in installation guide for Bun, Node.js, or VS Code extensions
+- **Clean Error Handling**: Clear guidance when ccusage is unavailable, no broken fallbacks
+
+### ☁️ WebDAV Cloud Sync
+- **Self-Hosted Cloud Storage**: Sync conversations and usage statistics to your own WebDAV server
+- **Multiple Server Support**: Compatible with Nextcloud, ownCloud, and any WebDAV-compatible server
+- **Secure Authentication**: Username/password authentication with SSL certificate validation
+- **Optional Encryption**: AES-256-GCM encryption for sensitive conversation data before upload
+- **Bidirectional Sync**: Smart merge of local and remote data with conflict resolution
+- **Cross-Device Usage**: Multi-device usage statistics aggregation and synchronization
+- **Privacy-First**: Full control over your data location and access
+
 ## Installation
+
+### Prerequisites
+
+For full usage tracking functionality, install one of:
+- **Bun** (recommended): `curl -fsSL https://bun.sh/install | bash` 
+- **Node.js**: Download from [nodejs.org](https://nodejs.org)
+- **Bun VS Code Extension**: Search for "Bun for Visual Studio Code" in Extensions
 
 ### Option 1: Install from VSIX (Recommended)
 
@@ -80,6 +105,13 @@ A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md 
 3. **Export conversations**: Right-click conversations for export options
 4. **Search conversations**: Use the built-in search functionality in conversation viewer
 
+### WebDAV Cloud Sync
+1. **Configure WebDAV**: Click "Cloud Settings" in the sidebar to configure your WebDAV server
+2. **Server Setup**: Enter your Nextcloud/ownCloud/WebDAV server URL and credentials
+3. **Test Connection**: Verify your WebDAV configuration works correctly
+4. **Sync Data**: Use "Sync to Cloud" to upload conversations and usage statistics
+5. **Cross-Device**: Access your data from multiple devices with the same WebDAV configuration
+
 ## Commands
 
 ### CLAUDE.md Management
@@ -91,8 +123,12 @@ A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md 
 - `Claude Config: Browse Conversations` - Open conversation history browser with quick pick
 - `Claude Config: View Conversation` - View specific conversation in rich webview
 - `Claude Config: Export Conversation` - Export individual conversation to file
-- `Claude Config: Export All Conversations` - Bulk export all conversations
 - `Claude Config: Refresh Conversations` - Refresh conversation tree view
+
+### WebDAV Cloud Sync
+- `Claude Config: Sync to Cloud` - Sync conversations and usage data to WebDAV server
+- `Claude Config: Cloud Settings` - Configure WebDAV server connection and credentials
+- `Claude Config: Test Cloud Connection` - Verify WebDAV server connectivity
 
 ## Settings
 
@@ -101,6 +137,17 @@ A comprehensive VSCode extension for Claude Code workflows, providing CLAUDE.md 
 
 ### Conversation History
 - `claude-config.conversationDataPath`: Custom path to Claude conversation data directory (default: ~/.claude/projects)
+
+### WebDAV Cloud Sync
+- `claude-config.cloudSync.enabled`: Enable WebDAV cloud synchronization (default: false)
+- `claude-config.cloudSync.webdav.serverUrl`: WebDAV server URL (e.g., https://your-domain.com/remote.php/dav/files/username/)
+- `claude-config.cloudSync.webdav.username`: WebDAV username
+- `claude-config.cloudSync.webdav.basePath`: Base path for Claude data on WebDAV server (default: /Claude-Config-Sync/)
+- `claude-config.cloudSync.webdav.verifySSL`: Verify SSL certificates (default: true)
+- `claude-config.cloudSync.autoSync`: Enable automatic background sync (default: false)
+- `claude-config.cloudSync.syncInterval`: Sync interval in minutes (0 for manual only)
+- `claude-config.cloudSync.encryption`: Enable data encryption (default: false)
+- `claude-config.cloudSync.conflictResolution`: Default conflict resolution strategy (local, remote, ask)
 
 ## Sync Behavior
 
@@ -239,6 +286,26 @@ This extension operates entirely locally and does not collect, transmit, or stor
 For security issues, please report them privately via GitHub's security advisory feature.
 
 ## Changelog
+
+### v3.3.2 - Codebase Maintenance & ccusage Integration Stability Release
+- **🧹 Code Cleanup**: Removed experimental and incomplete features, focused on core stable functionality
+- **🔧 ccusage Integration**: Maintained and stabilized ccusage CLI integration for accurate usage tracking
+- **📦 Release Preparation**: Cleaned up build artifacts and streamlined codebase for marketplace
+- **🛠️ Architecture Refinement**: Simplified extension architecture focusing on proven features
+- **📋 Documentation Updates**: Updated documentation to reflect current stable feature set
+- **🚀 Core Features**: CLAUDE.md management, conversation history browser, PROJECT_PLAN integration, and ccusage-powered usage tracking
+
+### v3.3.0 - WebDAV Cloud Sync Integration (Major Release)
+- **🆕 WebDAV Cloud Sync**: Complete WebDAV synchronization architecture supporting Nextcloud, ownCloud, and generic WebDAV servers
+- **🆕 Self-Hosted Privacy**: Full control over your data with self-hosted cloud storage solutions
+- **🆕 Cross-Device Sync**: Synchronize conversations and usage statistics across multiple devices
+- **🆕 Secure Authentication**: Username/password authentication with SSL certificate validation for self-signed certificates
+- **🆕 Optional Encryption**: AES-256-GCM encryption for sensitive conversation data before upload
+- **🆕 Conflict Resolution**: Smart merge strategies for concurrent modifications across devices
+- **🆕 Integrated UI**: Seamless left panel integration with "Sync to Cloud" and "Cloud Settings" buttons
+- **🔧 Architecture Simplification**: Removed multi-provider complexity in favor of focused WebDAV support
+- **🔧 Enhanced Security**: PBKDF2 key derivation and secure credential storage using VSCode SecretStorage API
+- **🔧 Better Privacy**: No dependency on third-party commercial cloud providers
 
 ### v3.2.1 - Icon Visibility Fix
 - **FIXED**: Extension icon now appears in activity bar even when no workspace is open

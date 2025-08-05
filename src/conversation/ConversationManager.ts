@@ -4,12 +4,14 @@ import * as path from 'path';
 import * as os from 'os';
 import { ConversationMessage, ConversationSession, ConversationSummary, ConversationFilter } from './types';
 import { sanitizePath } from '../security';
+import { SummaryCacheManager } from './SummaryCache';
 
 export class ConversationManager {
     private claudeDataPath: string;
     private fileWatcher: vscode.FileSystemWatcher | undefined;
     private onConversationsChangedEmitter = new vscode.EventEmitter<void>();
     public onConversationsChanged = this.onConversationsChangedEmitter.event;
+    protected summaryCache = SummaryCacheManager.getInstance();
 
     constructor(private context: vscode.ExtensionContext) {
         // Default Claude data path - can be overridden by configuration
@@ -17,14 +19,37 @@ export class ConversationManager {
         this.setupFileWatcher();
     }
 
+    /**
+     * 🆕 Trigger conversation panel refresh (for cloud sync)
+     */
+    protected triggerRefresh(): void {
+        console.log('[ConversationManager] 🔄 Triggering conversation panel refresh');
+        this.onConversationsChangedEmitter.fire();
+    }
+
     private setupFileWatcher() {
-        // Watch for changes in the Claude conversations directory
-        const watchPattern = path.join(this.claudeDataPath, '**', '*.jsonl');
-        this.fileWatcher = vscode.workspace.createFileSystemWatcher(watchPattern);
+        // 🆕 ENHANCED FILE WATCHING: Watch for both .jsonl and .summary.json files
+        const jsonlPattern = path.join(this.claudeDataPath, '**', '*.jsonl');
+        const summaryPattern = path.join(this.claudeDataPath, '**', '*.summary.json');
         
-        this.fileWatcher.onDidCreate(() => this.onConversationsChangedEmitter.fire());
-        this.fileWatcher.onDidChange(() => this.onConversationsChangedEmitter.fire());
-        this.fileWatcher.onDidDelete(() => this.onConversationsChangedEmitter.fire());
+        // Create watchers for both file types
+        this.fileWatcher = vscode.workspace.createFileSystemWatcher(`{${jsonlPattern},${summaryPattern}}`);
+        
+        this.fileWatcher.onDidCreate((uri) => {
+            console.log('[ConversationManager] 🔄 File created - refreshing conversations');
+            this.invalidateCacheForFile(uri.fsPath);
+            this.onConversationsChangedEmitter.fire();
+        });
+        this.fileWatcher.onDidChange((uri) => {
+            console.log('[ConversationManager] 🔄 File changed - refreshing conversations');
+            this.invalidateCacheForFile(uri.fsPath);
+            this.onConversationsChangedEmitter.fire();
+        });
+        this.fileWatcher.onDidDelete((uri) => {
+            console.log('[ConversationManager] 🔄 File deleted - refreshing conversations');
+            this.invalidateCacheForFile(uri.fsPath);
+            this.onConversationsChangedEmitter.fire();
+        });
         
         this.context.subscriptions.push(this.fileWatcher);
     }
@@ -41,8 +66,21 @@ export class ConversationManager {
         return path.join(os.homedir(), '.claude', 'projects');
     }
 
-    async getAvailableConversations(): Promise<ConversationSummary[]> {
+    /**
+     * Get available conversations with summary-first loading and caching
+     * Returns cached summaries immediately if available, otherwise loads from files
+     */
+    async getAvailableConversations(useCache: boolean = true): Promise<ConversationSummary[]> {
         try {
+            // Try to return cached summaries first for fast loading
+            if (useCache) {
+                const cached = this.summaryCache.getAll();
+                if (cached.length > 0) {
+                    console.log(`[ConversationManager] 📦 Returning ${cached.length} cached summaries`);
+                    return cached.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+                }
+            }
+
             const conversations: ConversationSummary[] = [];
             
             if (!await fs.pathExists(this.claudeDataPath)) {
@@ -62,15 +100,40 @@ export class ConversationManager {
                     console.log(`Project ${projectDir} has files:`, sessionFiles);
                     
                     for (const sessionFile of sessionFiles) {
+                        // 🆕 DUAL FILE SUPPORT: Process both .jsonl files and .summary.json files
                         if (sessionFile.endsWith('.jsonl')) {
                             const sessionPath = path.join(projectPath, sessionFile);
-                            console.log(`Processing conversation file: ${sessionPath}`);
+                            console.log(`Processing LOCAL conversation file: ${sessionPath}`);
                             const summary = await this.getConversationSummary(sessionPath, projectDir);
                             if (summary) {
                                 conversations.push(summary);
-                                console.log(`Added conversation: ${summary.projectName} - ${summary.messageCount} messages`);
+                                this.cacheSummary(summary, 'local'); // Cache the summary
+                                console.log(`Added LOCAL conversation: ${summary.projectName} - ${summary.messageCount} messages`);
                             } else {
-                                console.log(`Failed to parse conversation: ${sessionPath}`);
+                                console.log(`Failed to parse local conversation: ${sessionPath}`);
+                            }
+                        } else if (sessionFile.endsWith('.summary.json')) {
+                            // 📝 Process cloud-synced summary files
+                            const summaryPath = path.join(projectPath, sessionFile);
+                            console.log(`[ConversationManager] 📝 Processing CLOUD SUMMARY file: ${summaryPath}`);
+                            try {
+                                const summary = await this.getCloudSummary(summaryPath, projectDir);
+                                if (summary) {
+                                    // Only add if we don't already have the full conversation
+                                    const sessionId = summary.sessionId;
+                                    const hasFullConversation = conversations.some(c => c.sessionId === sessionId);
+                                    if (!hasFullConversation) {
+                                        conversations.push(summary);
+                                        this.cacheSummary(summary, 'cloud'); // Cache the cloud summary
+                                        console.log(`[ConversationManager] 📝 ✅ Added CLOUD SUMMARY: ${summary.projectName} - ${summary.messageCount} messages (from cloud)`);
+                                    } else {
+                                        console.log(`[ConversationManager] 📝 ⚠️ Skipping cloud summary for ${sessionId} - full conversation already loaded`);
+                                    }
+                                } else {
+                                    console.warn(`[ConversationManager] 📝 ❌ Failed to parse cloud summary: ${summaryPath}`);
+                                }
+                            } catch (cloudSummaryError) {
+                                console.error(`[ConversationManager] 📝 ❌ Error processing cloud summary ${summaryPath}:`, cloudSummaryError);
                             }
                         }
                     }
@@ -173,6 +236,57 @@ export class ConversationManager {
             };
         } catch (error) {
             console.error(`Error parsing conversation summary for ${filePath}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * 🆕 Get conversation summary from cloud-synced summary files
+     * Processes .summary.json files created by cloud sync
+     */
+    private async getCloudSummary(summaryPath: string, projectDir: string): Promise<ConversationSummary | null> {
+        try {
+            console.log(`[ConversationManager] 📝 Processing cloud summary: ${summaryPath}`);
+            
+            // Read and parse the summary JSON file
+            const content = await fs.readFile(summaryPath, 'utf8');
+            const cloudSummary = JSON.parse(content);
+            
+            console.log(`[ConversationManager] 📝 Cloud summary data:`, {
+                sessionId: cloudSummary.sessionId,
+                messageCount: cloudSummary.messageCount,
+                isFromCloud: cloudSummary.isFromCloud,
+                syncedAt: cloudSummary.cloudMetadata?.syncedAt
+            });
+            
+            // Validate required fields
+            if (!cloudSummary.sessionId || !cloudSummary.startTime || cloudSummary.messageCount === undefined) {
+                console.error(`[ConversationManager] 📝 ❌ Invalid cloud summary structure in ${summaryPath}`);
+                return null;
+            }
+            
+            // Convert cloud summary to ConversationSummary format
+            const conversationSummary: ConversationSummary = {
+                sessionId: cloudSummary.sessionId,
+                projectPath: cloudSummary.projectPath || projectDir,
+                projectName: cloudSummary.projectName || this.extractProjectName(projectDir),
+                startTime: cloudSummary.startTime,
+                endTime: cloudSummary.endTime || cloudSummary.startTime,
+                messageCount: cloudSummary.messageCount,
+                duration: cloudSummary.duration || this.calculateDuration(cloudSummary.startTime, cloudSummary.endTime || cloudSummary.startTime),
+                filePath: cloudSummary.filePath || path.join(path.dirname(summaryPath), `${cloudSummary.sessionId}.jsonl`),
+                firstMessage: cloudSummary.firstMessage,
+                lastMessage: cloudSummary.lastMessage,
+                // Add cloud-specific metadata
+                isFromCloud: true,
+                cloudSyncMetadata: cloudSummary.cloudMetadata
+            };
+            
+            console.log(`[ConversationManager] 📝 ✅ Successfully parsed cloud summary for ${cloudSummary.sessionId}`);
+            return conversationSummary;
+            
+        } catch (error) {
+            console.error(`[ConversationManager] 📝 ❌ Error parsing cloud summary ${summaryPath}:`, error);
             return null;
         }
     }
@@ -321,5 +435,107 @@ export class ConversationManager {
 
     updateDataPath(newPath: string): void {
         this.claudeDataPath = sanitizePath(newPath);
+        // Clear cache when data path changes
+        this.summaryCache.clear();
+    }
+
+    /**
+     * Get conversations from cache only (fast tree view loading)
+     */
+    getCachedConversations(): ConversationSummary[] {
+        return this.summaryCache.getAll();
+    }
+
+    /**
+     * Load conversation with progressive enhancement
+     * Returns cached summary immediately, loads full conversation in background
+     */
+    async loadConversationProgressive(sessionId: string): Promise<{
+        summary: ConversationSummary | null;
+        fullConversation: Promise<ConversationSession | null>;
+    }> {
+        // Get summary from cache first
+        const summary = this.summaryCache.get(sessionId);
+        
+        // Start loading full conversation in background
+        const fullConversation = this.loadConversationById(sessionId);
+        
+        return {
+            summary,
+            fullConversation
+        };
+    }
+
+    /**
+     * Load full conversation by session ID
+     */
+    private async loadConversationById(sessionId: string): Promise<ConversationSession | null> {
+        // Find the conversation file
+        const summary = this.summaryCache.get(sessionId);
+        if (summary && summary.filePath) {
+            return this.loadConversation(summary.filePath);
+        }
+
+        // If not in cache, search through all project directories
+        try {
+            const projectDirs = await fs.readdir(this.claudeDataPath);
+            
+            for (const projectDir of projectDirs) {
+                const projectPath = path.join(this.claudeDataPath, projectDir);
+                const stat = await fs.stat(projectPath);
+                
+                if (stat.isDirectory()) {
+                    const jsonlPath = path.join(projectPath, `${sessionId}.jsonl`);
+                    if (await fs.pathExists(jsonlPath)) {
+                        return this.loadConversation(jsonlPath);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error searching for conversation ${sessionId}:`, error);
+        }
+
+        return null;
+    }
+
+    /**
+     * Invalidate cache for a specific file
+     */
+    private invalidateCacheForFile(filePath: string): void {
+        const fileName = path.basename(filePath);
+        
+        if (fileName.endsWith('.jsonl')) {
+            // Extract session ID from .jsonl file
+            const sessionId = path.basename(fileName, '.jsonl');
+            this.summaryCache.delete(sessionId);
+            console.log(`[ConversationManager] 🗑️ Invalidated cache for session: ${sessionId}`);
+        } else if (fileName.endsWith('.summary.json')) {
+            // Extract session ID from .summary.json file
+            const sessionId = path.basename(fileName, '.summary.json');
+            this.summaryCache.delete(sessionId);
+            console.log(`[ConversationManager] 🗑️ Invalidated cache for summary: ${sessionId}`);
+        }
+    }
+
+    /**
+     * Cache a conversation summary (called after loading from files)
+     */
+    protected cacheSummary(summary: ConversationSummary, source: 'local' | 'cloud' = 'local'): void {
+        this.summaryCache.set(summary.sessionId, summary, source);
+    }
+
+    /**
+     * Get cache statistics for monitoring
+     */
+    getCacheStats() {
+        return this.summaryCache.getStats();
+    }
+
+    /**
+     * Force refresh of all conversations (bypass cache)
+     */
+    async refreshAllConversations(): Promise<ConversationSummary[]> {
+        this.summaryCache.clear();
+        return this.getAvailableConversations(false);
     }
 }

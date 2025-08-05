@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a VSCode extension called "Claude Config Manager" that provides comprehensive management for Claude Code workflows. The extension offers two main features:
+This is a VSCode extension called "Claude Config Manager" that provides comprehensive management for Claude Code workflows. The extension offers three main features:
 
 1. **CLAUDE.md Management**: Automatic PROJECT_PLAN rule injection and sync of CLAUDE.md configuration files directly to the workspace's existing Git repository
-2. **Conversation History Browser**: Browse, view, and export Claude Code conversation history with a rich webview interface
+2. **Conversation History Browser**: Browse, view, and export Claude Code conversation history with a rich webview interface  
+3. **WebDAV Cloud Sync Integration**: WebDAV cloud synchronization for conversations and usage statistics across devices
 
-The extension includes a custom activity bar icon with dual sidebar views for both configuration management and conversation browsing.
+The extension includes a custom activity bar icon with integrated sidebar views for configuration management, conversation browsing, and cloud sync operations.
 
 ## Development Commands
 
@@ -71,12 +72,64 @@ The extension includes a custom activity bar icon with dual sidebar views for bo
 - Handles conversation export to multiple formats (Markdown, JSON, Text)
 
 **Token Tracker** (`src/tokenTracker.ts`):
-- Monitors token usage and provides cost estimation and statistics
-- Tracks usage across different conversations and operations
-- Provides comprehensive reporting with daily, weekly, and monthly breakdowns
-- **UPDATED v3.2.4**: Daily usage tracking aligned with Claude's session-based model (5-hour windows)
-- **UPDATED v3.2.4**: Manual service tier configuration for accurate usage calculations
-- **UPDATED v3.2.4**: Fixed percentage calculation issues that showed false 100% readings
+- Legacy token tracking component (maintained for extension infrastructure)
+- Provides extension activation and configuration management
+- Used for status bar updates and basic usage metadata
+- **Note**: Primary usage tracking now handled by ccusage integration
+
+**CcusageService** (`src/services/CcusageService.ts`):
+- **NEW v3.3.1**: Core service wrapper for ccusage CLI integration
+- Smart package manager detection with automatic fallback (bunx → npx → npm exec)
+- 30-second caching system to minimize CLI calls while providing real-time updates
+- Handles ccusage command execution with proper error handling and timeout management
+- Provides methods for daily, session, monthly, and live usage data retrieval
+- Data path configuration support for custom Claude conversation directories
+
+**ccusage-Powered Usage Monitor** (`src/components/UsageMonitor.ts`):
+- **UPDATED v3.3.1**: Real-time usage display powered by ccusage CLI integration
+- Clean card-based interface showing today's tokens, costs, and breakdowns
+- Displays input, output, cache creation, and cache read token statistics
+- Model detection and usage breakdown by Claude model types
+- Graceful error handling with helpful installation guidance
+- Automatic fallback across package managers when ccusage is unavailable
+
+### WebDAV Cloud Sync Architecture
+
+**CloudProviderInterface** (`src/cloud/CloudProviderInterface.ts`):
+- Unified abstraction layer for WebDAV cloud storage
+- Standardized operations: upload, download, list, delete, authentication
+- Support for Nextcloud, ownCloud, and other WebDAV-compatible servers
+- WebDAV-specific configuration and quota management
+
+**CloudAuthManager** (`src/cloud/CloudAuthManager.ts`):
+- Secure credential management using VSCode SecretStorage API
+- WebDAV username/password authentication
+- Credential validation and testing capabilities
+- SSL certificate handling for self-hosted servers
+
+**CloudDataSchema** (`src/cloud/CloudDataSchema.ts`):
+- Extensible data structures for cloud storage
+- Metadata tracking for sync state and conflict resolution
+- Data serialization with compression and encryption support
+- Version compatibility and migration handling
+
+**CloudConversationManager** (`src/cloud/CloudConversationManager.ts`):
+- Extends ConversationManager with cloud sync capabilities
+- Bidirectional sync with conflict detection and resolution
+- Delta sync for efficient data transfer
+- Multi-device conversation aggregation
+
+**CloudTokenTracker** (`src/cloud/CloudTokenTracker.ts`):
+- Extends TokenTracker with cloud backup functionality
+- Cross-device usage statistics aggregation
+- Device identification and sync coordination
+- Cloud-enabled usage percentage calculations
+
+**CloudEncryption** (`src/cloud/CloudEncryption.ts`):
+- AES-256-GCM encryption for sensitive data protection
+- PBKDF2 key derivation with secure salt generation
+- Optional encryption with user-controlled passwords
+- Secure key caching and management
 
 ### Command Structure
 
@@ -98,13 +151,27 @@ Commands are modularized in `/src/commands/`:
 
 **Usage Commands:**
 
-- `usage.ts` - View usage statistics and token tracking information
+- `usage.ts` - ccusage-powered usage statistics and tracking
+  - **UPDATED v3.3.1**: Complete ccusage CLI integration with smart package manager detection
+  - Real-time statistics from actual Claude Code usage data
+  - Installation helper commands for Bun, Node.js, and VS Code extensions
+  - Debug commands for testing ccusage availability and data retrieval
+  - Clean error states with actionable guidance when ccusage is unavailable
+
+**Cloud Sync Commands:**
+
+- `cloudSyncIntegrated.ts` - Integrated WebDAV cloud sync functionality
+  - `syncToCloudCommand` - Enhanced export with WebDAV sync options
+  - `openCloudSettingsCommand` - WebDAV provider configuration and management
+  - WebDAV support for Nextcloud, ownCloud, and other WebDAV servers
+  - Bidirectional sync capabilities with conflict resolution
 
 ### Key Dependencies
 
 - `simple-git` - Git operations
 - `fs-extra` - Enhanced file system operations
 - `sharp` - SVG to PNG icon conversion (development only)
+- `child_process` - CLI execution for ccusage integration
 - VSCode API for extension functionality
 
 ### Asset Management
@@ -123,14 +190,29 @@ The extension uses VSCode configuration with prefix `claude-config`:
 
 - `conversationDataPath` - Custom path to Claude conversation data directory (default: ~/.claude/projects)
 
-**Usage Tracking Settings:**
+**ccusage Integration Settings:**
 
 - `tokenTrackingEnabled` - Enable/disable token usage tracking (default: true)
 - `showUsageNotifications` - Show usage notifications after operations (default: false)
-- `usageTracking.showPercentage` - Show usage percentage in status bar and tree views (default: true)
-- `usageTracking.customLimits` - Custom usage limits override (e.g., {"daily": 2000000})
-- `usageTracking.warningThresholds` - Usage percentage thresholds for warnings (warning: 80%, critical: 95%)
-- **NEW v3.2.4**: `serviceTier` - Your Claude subscription tier (free, pro, max-100, max-200) for accurate usage calculations
+- `usageTracking.showPercentage` - Show usage information in status bar and tree views (default: true)
+- **NOTE**: Custom limits, warning thresholds, and service tier settings are no longer needed with ccusage integration as it provides actual usage data directly from Claude Code
+
+**WebDAV Cloud Sync Settings:**
+
+- `cloudSync.enabled` - Enable WebDAV cloud synchronization (default: false)
+- `cloudSync.webdav.serverUrl` - WebDAV server URL (e.g., https://your-domain.com/remote.php/dav/files/username/)
+- `cloudSync.webdav.username` - WebDAV username
+- `cloudSync.webdav.basePath` - Base path for Claude data on WebDAV server (default: /Claude-Config-Sync/)
+- `cloudSync.webdav.verifySSL` - Verify SSL certificates (default: true, disable only for self-signed certificates)
+- `cloudSync.autoSync` - Enable automatic background sync (default: false)
+- `cloudSync.syncInterval` - Sync interval in minutes (0 for manual only)
+- `cloudSync.compression` - Enable data compression (default: true)
+- `cloudSync.encryption` - Enable data encryption (default: false)
+- `cloudSync.maxFileSize` - Maximum file size for sync in bytes (default: 50MB)
+- `cloudSync.conflictResolution` - Default strategy: 'local', 'remote', 'ask'
+
+**✨ Settings Panel Integration**
+WebDAV configuration is now available directly in VS Code settings! Open Settings (Ctrl/Cmd+,) and search for "claude-config cloudSync" to easily configure your WebDAV server without using the command palette.
 
 ## How It Works
 
@@ -185,47 +267,116 @@ The extension provides comprehensive conversation history management:
 - Conversation files (`.claude/.chats/`) are excluded from Git tracking to prevent accidental secret exposure
 - GitHub push protection integration to block commits containing sensitive data
 
-### Usage Tracking & Statistics
+### ccusage-Powered Usage Tracking
 
-The extension provides comprehensive token usage monitoring and cost estimation:
+The extension provides accurate token usage monitoring powered by the ccusage CLI tool:
 
-**Token Usage Tracking:**
+**ccusage Integration:**
 
-- Monitors and tracks estimated token usage with cost estimation for each operation
-- Tracks usage across different conversations and Claude Code interactions
-- Provides real-time usage notifications after operations (configurable)
+- **Real Usage Data**: Direct integration with ccusage CLI for accurate Claude Code usage statistics
+- **Automatic Package Manager Detection**: Smart fallback across bunx → npx → npm exec for seamless setup
+- **No Installation Required**: Uses existing package managers without requiring ccusage pre-installation
+- **Cached Performance**: 30-second caching to minimize CLI calls while providing real-time updates
 
-**UPDATED v3.2.4 - Claude Usage Tracking:**
+**ccusage-Powered Features:**
 
-- **Daily Usage Tracking**: Shows usage percentage based on daily estimates (aligned with Claude's session-based model)
-- **Status Bar Integration**: Live updates with visual indicators: `📊 Claude: 15.2% (8h 30m)` showing current percentage and reset time
-- **Manual Service Tier Configuration**: Set your actual Claude subscription tier for accurate percentage calculations
-- **Session-Based Model**: Tracks usage aligned with Claude's 5-hour session windows and daily patterns
-- **Visual Warnings**: Status icons change based on usage thresholds (📊 normal, ⚠️ warning at 80%, 🚨 critical at 95%)
-- **Tree View Integration**: Percentage indicators displayed in both Claude Config and Usage Statistics sidebar views
-- **Fixed False 100% Readings**: Resolved issues where usage showed 100% when Claude was still accessible
+- **Today's Usage Display**: Real-time tokens, costs, and model usage from actual Claude Code data
+- **Token Breakdown**: Detailed breakdown of input, output, cache creation, and cache read tokens
+- **Model Detection**: Automatic detection and display of Claude models used (Opus, Sonnet, etc.)
+- **Daily, Monthly, Session Views**: Multiple time perspectives of usage data
+- **Cost Accuracy**: Real cost calculations based on actual token usage, not estimates
+- **Clean Error Handling**: Helpful guidance when ccusage is unavailable, with installation instructions
 
-**Usage Statistics:**
+**Technical Architecture:**
 
-- Comprehensive reporting with daily, weekly, and monthly breakdowns
-- Cost estimation and usage analytics to help manage Claude usage
-- Integration with conversation history for detailed usage insights
+- **CcusageService** (`src/services/CcusageService.ts`): Core service wrapper for ccusage CLI integration
+- **Smart Execution**: Tries bunx first (fastest), falls back to npx, then npm exec
+- **Data Path Detection**: Uses configured conversation data path or defaults to ~/.claude/projects
+- **Error Recovery**: Graceful handling of missing package managers with clear user guidance
+
+### WebDAV Cloud Sync Integration
+
+The extension provides comprehensive WebDAV cloud synchronization capabilities:
+
+**WebDAV Server Support:**
+
+- **Nextcloud**: Self-hosted cloud storage with full WebDAV compatibility
+- **ownCloud**: Open-source file sharing platform with WebDAV support
+- **Generic WebDAV**: Any WebDAV-compatible server for maximum flexibility
+
+**Sync Capabilities:**
+
+- **Conversation History Sync**: Upload and download conversation JSONL files across devices
+- **Usage Statistics Sync**: Cross-device usage aggregation and statistics consolidation
+- **Bidirectional Sync**: Smart merge of local and remote data with conflict resolution
+- **Delta Sync**: Efficient transfer of only changed data to minimize bandwidth
+
+**Security Features:**
+
+- **Optional Encryption**: AES-256-GCM encryption for sensitive conversation data
+- **Secure Credential Storage**: VSCode SecretStorage API for provider authentication
+- **Conflict Resolution**: Intelligent merge strategies for concurrent modifications
+- **Data Validation**: Input sanitization and path validation for security
+
+**Integration Points:**
+
+- **Tree View Integration**: "Sync to Cloud" and "Cloud Settings" buttons in left panel
+- **Enhanced Export**: Export functionality extended with cloud sync options
+- **Usage Statistics**: Cloud sync status displayed in usage statistics section
+- **Settings Integration**: Cloud configuration accessible through VS Code settings panel
 
 ## Recent Updates
 
-### v3.2.4 - Usage Tracking Model Corrections & Accuracy Improvements
+### v3.3.2 - Codebase Maintenance & Stability Release
 
-- **🔧 Fixed Usage Model**: Corrected from weekly to daily-based tracking to align with Claude's actual session-based usage model (5-hour windows)
-- **🔧 Manual Service Tier Configuration**: Added `serviceTier` setting to replace unreliable automatic detection that caused false 100% readings
-- **🔧 Accurate Percentage Calculations**: Fixed usage percentage calculations using realistic daily limits based on 2025 Claude subscription tiers
-- **🔧 Updated Service Tier Limits**: Revised limits to reflect Claude's actual usage patterns:
-  - Free: ~250K tokens/day (~50 messages)
-  - Pro: ~2M tokens/day (session-based limits)
-  - Max-100: ~8M tokens/day
-  - Max-200: ~12M tokens/day
-- **🔧 Status Bar Updates**: Changed display from "weekly limit" to "daily estimate" for accuracy
-- **🔧 Notification Text Updates**: Updated all user-facing text to reflect daily tracking model
-- **🔧 Code Cleanup**: Removed unused async methods and fixed diagnostic issues
+- **🧹 Code Cleanup**: Removed experimental and incomplete features from codebase for better stability
+- **🔧 ccusage Integration Maintained**: Preserved and stabilized ccusage CLI integration functionality
+- **📦 Release Preparation**: Cleaned up build artifacts, old packages, and unnecessary files
+- **🛠️ Architecture Refinement**: Focused on core stable features: CLAUDE.md management, conversation history, PROJECT_PLAN integration, and ccusage usage tracking
+- **📋 Documentation Updates**: Updated README.md, CLAUDE.md, and PROJECT_PLAN.md to reflect current stable feature set
+- **🚀 Marketplace Ready**: Streamlined extension for marketplace distribution with clean, maintainable codebase
+
+### v3.3.1 - ccusage Integration & Accurate Usage Tracking (Major Update)
+
+- **🆕 ccusage CLI Integration**: Complete replacement of TokenTracker with ccusage for accurate Claude Code usage tracking
+- **🆕 Smart Package Manager Detection**: Automatic fallback across bunx → npx → npm exec without requiring pre-installation
+- **🆕 Real Usage Data**: Direct access to actual Claude Code token usage, costs, and model breakdowns
+- **🆕 Installation Helper**: Built-in guidance for Bun, Node.js, and VS Code extension installation
+- **🆕 CcusageService Architecture**: New service layer for CLI integration with 30-second caching
+- **🔧 Removed TokenTracker Dependency**: Eliminated complex percentage calculations and window-based tracking
+- **🔧 Clean Error Handling**: User-friendly guidance when ccusage is unavailable
+- **🔧 Performance Optimized**: Cached CLI calls with automatic cleanup to minimize system impact
+- **📋 Documentation Updated**: README.md, CLAUDE.md updated with ccusage integration details
+- **🧹 Code Cleanup**: Removed legacy tracking code and simplified usage display logic
+
+**Technical Details**: Replaced the problematic TokenTracker system (which showed 91.9M tokens/918.9% usage) with direct ccusage CLI integration. The new CcusageService provides real Claude Code usage data through smart package manager detection, eliminating the need for complex usage calculations.
+
+### v3.3.0 - WebDAV Cloud Sync Integration & Architecture Simplification (Major Release)
+
+- **🆕 WebDAV Cloud Sync**: Complete WebDAV synchronization architecture supporting Nextcloud, ownCloud, and generic WebDAV servers
+- **🆕 Integrated Left Panel**: Replaced command palette commands with seamless left panel integration
+- **🆕 Enhanced Export Functionality**: "Sync to Cloud" button with WebDAV sync options (conversations, usage stats, local export, bidirectional)
+- **🆕 WebDAV Settings Integration**: Direct access to WebDAV server configuration through "Cloud Settings" button
+- **🆕 Secure Authentication**: VSCode SecretStorage API integration for secure credential management
+- **🆕 Optional Encryption**: AES-256-GCM encryption for sensitive conversation data
+- **🆕 Conflict Resolution**: Smart merge strategies for concurrent modifications across devices
+- **🆕 Cross-Device Usage**: Multi-device usage statistics aggregation and synchronization
+- **🔧 Tree View Enhancement**: WebDAV sync status integrated into usage statistics section
+- **🔧 No Command Palette Clutter**: All WebDAV sync functionality accessible through intuitive UI elements
+- **🔧 Architecture Simplification**: Removed multi-provider complexity in favor of focused, reliable WebDAV support
+- **🔧 Enhanced Privacy**: Self-hosted storage eliminates dependency on third-party commercial cloud providers
+
+### v3.2.5 - Legacy Visual Usage Monitor (Replaced in v3.3.1)
+
+- **⚠️ REPLACED**: Visual Usage Monitor functionality replaced with ccusage integration in v3.3.1
+- **🔧 Historical**: Semi-circular gauge chart and percentage tracking are no longer used
+- **📋 Migration**: Real-time usage tracking now powered by ccusage CLI for accuracy
+
+### v3.2.4 - Legacy Usage Tracking (Replaced in v3.3.1)
+
+- **⚠️ REPLACED**: Custom usage percentage calculations replaced with ccusage integration in v3.3.1
+- **🔧 Historical**: Manual service tier configuration and window-based tracking no longer needed
+- **📋 Migration**: Usage tracking now uses actual Claude Code data instead of estimates
 
 ### v3.2.2 - Claude Usage Percentage Tracker & Statistics Integration
 

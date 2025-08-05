@@ -1,8 +1,8 @@
 {
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
-  "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, and intelligent PROJECT_PLAN integration with Git",
-  "version": "3.2.2",
+  "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, PROJECT_PLAN integration with Git, ccusage-powered usage tracking, and WebDAV cloud synchronization",
+  "version": "3.3.2",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -33,7 +33,11 @@
     "history",
     "chat",
     "browser",
-    "export"
+    "export",
+    "ccusage",
+    "usage",
+    "tracking",
+    "tokens"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -97,21 +101,45 @@
       },
       {
         "command": "claude-config.showUsageQuickPick",
-        "title": "Show Usage Quick Pick",
+        "title": "Show Usage Quick Pick (ccusage)",
         "category": "Claude Config",
         "icon": "$(pie-chart)"
       },
       {
-        "command": "claude-config.debugTokenTracker",
-        "title": "Debug Token Tracker",
+        "command": "claude-config.debugCcusage",
+        "title": "Debug ccusage Integration",
         "category": "Claude Config",
-        "icon": "$(bug)"
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "claude-config.installCcusageHelp",
+        "title": "Install ccusage Help",
+        "category": "Claude Config",
+        "icon": "$(question)"
+      },
+      {
+        "command": "claude-config.showOutputChannel",
+        "title": "Show Output Channel",
+        "category": "Claude Config",
+        "icon": "$(output)"
       },
       {
         "command": "claude-config.refreshUsage",
         "title": "Refresh Usage Statistics",
         "category": "Claude Config",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "claude-config.syncToCloud",
+        "title": "Sync to Cloud",
+        "category": "Claude Config",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "claude-config.openCloudSettings",
+        "title": "Open Cloud Settings",
+        "category": "Claude Config",
+        "icon": "$(settings-gear)"
       }
     ],
     "viewsContainers": {
@@ -134,8 +162,12 @@
           "name": "Conversations"
         },
         {
-          "id": "claude-usage",
-          "name": "Usage Statistics"
+          "id": "claude-usage-monitor",
+          "name": "CCUsage Monitor"
+        },
+        {
+          "id": "claude-cloud-sync",
+          "name": "Cloud Sync"
         }
       ]
     },
@@ -161,8 +193,12 @@
         "when": "workspaceFolderCount == 0"
       },
       {
-        "view": "claude-usage",
-        "contents": "Track your Claude Code usage and costs.\n[View Detailed Statistics](command:claude-config.viewUsageStats)\n[Quick Usage Summary](command:claude-config.showUsageQuickPick)\n[Refresh](command:claude-config.refreshUsage)"
+        "view": "claude-usage-monitor",
+        "contents": "Real-time Claude usage monitoring powered by ccusage.\nShows actual token usage, costs, and model breakdowns.\n[Install ccusage Help](command:claude-config.installCcusageHelp) | [Debug Integration](command:claude-config.debugCcusage)"
+      },
+      {
+        "view": "claude-cloud-sync",
+        "contents": "WebDAV cloud synchronization for conversations and usage statistics.\nSync your Claude data across devices using Nextcloud, ownCloud, or any WebDAV server.\n[Setup Cloud Sync](command:claude-config.openCloudSettings) | [Sync to Cloud](command:claude-config.syncToCloud)"
       }
     ],
     "configuration": {
@@ -177,65 +213,100 @@
           "type": "string",
           "description": "Custom path to Claude conversation data directory (leave empty for default ~/.claude/projects)"
         },
-        "claude-config.tokenTrackingEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable/disable token usage tracking"
-        },
-        "claude-config.showUsageNotifications": {
+        "claude-config.usageTracking.showInStatusBar": {
           "type": "boolean",
           "default": false,
-          "description": "Show usage notifications after operations"
+          "description": "Show ccusage status in status bar"
         },
-        "claude-config.usageTracking.customLimits": {
-          "type": "object",
-          "default": {},
-          "description": "Custom usage limits override (e.g., {\"weekly\": 1600000, \"daily\": 200000})",
-          "properties": {
-            "daily": {
-              "type": "number",
-              "description": "Custom daily token limit"
-            },
-            "weekly": {
-              "type": "number", 
-              "description": "Custom weekly token limit"
-            }
-          }
+        "claude-config.cloudSync.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable WebDAV cloud synchronization"
         },
-        "claude-config.usageTracking.warningThresholds": {
-          "type": "object",
-          "default": {
-            "warning": 80,
-            "critical": 95
-          },
-          "description": "Usage percentage thresholds for warnings",
-          "properties": {
-            "warning": {
-              "type": "number",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 80,
-              "description": "Warning threshold percentage (default: 80%)"
-            },
-            "critical": {
-              "type": "number", 
-              "minimum": 1,
-              "maximum": 100,
-              "default": 95,
-              "description": "Critical threshold percentage (default: 95%)"
-            }
-          }
+        "claude-config.cloudSync.webdav.serverUrl": {
+          "type": "string",
+          "description": "WebDAV server URL (e.g., https://your-domain.com/remote.php/dav/files/username/)"
         },
-        "claude-config.usageTracking.showPercentage": {
+        "claude-config.cloudSync.webdav.username": {
+          "type": "string",
+          "description": "WebDAV username"
+        },
+        "claude-config.cloudSync.webdav.basePath": {
+          "type": "string",
+          "default": "/Claude-Config-Sync/",
+          "description": "Base path for Claude data on WebDAV server"
+        },
+        "claude-config.cloudSync.webdav.verifySSL": {
           "type": "boolean",
           "default": true,
-          "description": "Show usage percentage in status bar and tree views"
+          "description": "Verify SSL certificates (disable only for self-signed certificates)"
         },
-        "claude-config.serviceTier": {
+        "claude-config.cloudSync.autoSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable automatic background sync"
+        },
+        "claude-config.cloudSync.syncInterval": {
+          "type": "number",
+          "default": 0,
+          "description": "Sync interval in minutes (0 for manual only)"
+        },
+        "claude-config.summaryCache.ttlMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Time-to-live for summary cache entries in minutes"
+        },
+        "claude-config.summaryCache.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable summary caching for faster tree view loading"
+        },
+        "claude-config.search.fuzzySearch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable fuzzy search in conversation search"
+        },
+        "claude-config.search.maxResults": {
+          "type": "number",
+          "default": 50,
+          "minimum": 10,
+          "maximum": 500,
+          "description": "Maximum number of search results to display"
+        },
+        "claude-config.analytics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable conversation analytics and insights"
+        },
+        "claude-config.analytics.trackingPeriod": {
+          "type": "number",
+          "default": 90,
+          "minimum": 30,
+          "maximum": 365,
+          "description": "Number of days to include in analytics calculations"
+        },
+        "claude-config.cloudSync.compression": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable data compression"
+        },
+        "claude-config.cloudSync.encryption": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable data encryption"
+        },
+        "claude-config.cloudSync.maxFileSize": {
+          "type": "number",
+          "default": 52428800,
+          "description": "Maximum file size for sync in bytes (default: 50MB)"
+        },
+        "claude-config.cloudSync.conflictResolution": {
           "type": "string",
-          "enum": ["free", "pro", "max-100", "max-200", "max-5x"],
-          "default": "max-5x",
-          "description": "Your Claude subscription tier (helps calculate accurate usage percentages)"
+          "enum": ["local", "remote", "ask"],
+          "default": "ask",
+          "description": "Default conflict resolution strategy"
         }
       }
     }

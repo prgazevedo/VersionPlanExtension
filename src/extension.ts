@@ -8,27 +8,30 @@ import { ClaudeTreeDataProvider } from './claudeTreeProvider';
 import { ConversationManager } from './conversation/ConversationManager';
 import { ConversationTreeProvider } from './conversation/ConversationTreeProvider';
 import { ConversationViewer } from './conversation/ConversationViewer';
-import { UsageTreeProvider } from './UsageTreeProvider';
+import { UsageMonitorTreeProvider } from './UsageMonitorTreeProvider';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
-import { viewUsageStatsCommand, showUsageQuickPickCommand, debugTokenTrackerCommand } from './commands/usage';
-import { TokenTracker } from './tokenTracker';
+import { viewUsageStatsCommand, showUsageQuickPickCommand, debugCcusageCommand, installCcusageHelpCommand } from './commands/usage';
+import { syncToCloudCommand, openCloudSettingsCommand } from './commands/cloudSyncIntegrated';
+import { searchConversationsCommand, advancedSearchConversationsCommand, searchSuggestionsCommand } from './commands/searchConversations';
+import { viewAnalyticsCommand, viewAnalyticsSummaryCommand } from './commands/viewAnalytics';
 import { GitignoreManager } from './utils/GitignoreManager';
+import { SummaryCacheManager } from './conversation/SummaryCache';
 
 let repositoryManager: RepositoryManager;
 let fileManager: ClaudeFileManager;
 let conversationManager: ConversationManager;
 let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
-let usageTreeProvider: UsageTreeProvider;
-let tokenTracker: TokenTracker;
+let usageMonitorTreeProvider: UsageMonitorTreeProvider;
 let statusBarItem: vscode.StatusBarItem;
+let outputChannel: vscode.OutputChannel;
 
 async function ensureClaudeDirectoryStructure() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
-        console.warn('No workspace folder available for Claude directory structure');
+        // Silent - this is expected when no workspace is open
         return;
     }
     
@@ -44,14 +47,15 @@ async function ensureClaudeDirectoryStructure() {
         await fs.ensureDir(chatsDir);
         await fs.ensureDir(plansDir);
         
-        console.log(`Claude workspace directory structure ensured:`, {
-            claudeDir: claudeExists ? 'already existed' : 'created',
-            chatsDir: 'ensured',
-            plansDir: 'ensured',
-            workspacePath: workspaceFolder.uri.fsPath
-        });
+        // Only log during development or when DEBUG flag is set
+        // console.log(`Claude workspace directory structure ensured:`, {
+        //     claudeDir: claudeExists ? 'already existed' : 'created',
+        //     chatsDir: 'ensured',
+        //     plansDir: 'ensured',
+        //     workspacePath: workspaceFolder.uri.fsPath
+        // });
     } catch (error) {
-        console.warn('Failed to ensure Claude workspace directory structure:', error);
+        console.error('Failed to ensure Claude workspace directory structure:', error);
         // Don't throw - extension should still work even if directory creation fails
     }
 }
@@ -76,7 +80,7 @@ async function ensureGitignoreRules() {
                     });
                 }
             });
-            console.log('Claude .gitignore rules added to workspace');
+            // Removed verbose logging - user gets notification above
         }
     } catch (error) {
         console.warn('Failed to update .gitignore rules:', error);
@@ -113,7 +117,8 @@ async function checkForClaudemdAndOfferProjectPlan() {
             }
         }
     } catch (error) {
-        console.warn('Failed to check for CLAUDE.md:', error);
+        // Only log errors, not warnings for expected conditions
+        console.error('Error checking for CLAUDE.md:', error);
     }
 }
 
@@ -145,14 +150,14 @@ This ensures better code quality and maintains project knowledge continuity acro
         if (await fs.pathExists(claudemdPath)) {
             const content = await fs.readFile(claudemdPath, 'utf8');
             if (content.includes('# PROJECT_PLAN Integration')) {
-                console.log('PROJECT_PLAN rule already exists in CLAUDE.md');
+                // Silent - this is the expected case
                 return;
             }
         }
 
         // Append the rule to CLAUDE.md
         await fs.appendFile(claudemdPath, projectPlanRule);
-        console.log('PROJECT_PLAN rule added to CLAUDE.md');
+        // Silent - user will see the notification when PROJECT_PLAN.md is created
     } catch (error) {
         console.error('Failed to add PROJECT_PLAN rule to CLAUDE.md:', error);
         throw error;
@@ -223,7 +228,20 @@ Current priorities and planned improvements.
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-    console.log('Claude Config Manager is now active!');
+    // Create output channel for debugging
+    outputChannel = vscode.window.createOutputChannel('Claude Config Manager');
+    outputChannel.appendLine('Claude Config Manager activated');
+    // Don't auto-show output channel to reduce noise
+    
+    // Override console.log to also output to our channel (for errors and important messages)
+    const originalConsoleLog = console.log;
+    console.log = (...args: any[]) => {
+        originalConsoleLog(...args);
+        // Only log to output channel for debugging purposes
+        outputChannel.appendLine(args.map(arg => 
+            typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        ).join(' '));
+    };
 
     // Initialize directory structure and security features safely
     try {
@@ -236,17 +254,20 @@ export async function activate(context: vscode.ExtensionContext) {
         // Don't let initialization errors crash the extension
     }
 
-    // Initialize managers - TokenTracker must be initialized first
-    tokenTracker = TokenTracker.getInstance(context);
+    // Initialize managers
     repositoryManager = new RepositoryManager(context);
     fileManager = new ClaudeFileManager(context, repositoryManager);
     conversationManager = new ConversationManager(context);
     conversationTreeProvider = new ConversationTreeProvider(conversationManager);
     conversationViewer = new ConversationViewer(context, conversationManager);
-    usageTreeProvider = new UsageTreeProvider();
     
-    // Debug: log initial statistics to help troubleshoot
-    console.log('TokenTracker initialized, checking initial stats:', tokenTracker.getStatistics());
+    // Initialize tree providers
+    usageMonitorTreeProvider = new UsageMonitorTreeProvider();
+    
+    // Refresh tree providers
+    setTimeout(() => {
+        usageMonitorTreeProvider.refresh();
+    }, 100);
 
     // Create tree data providers and register tree views
     const treeDataProvider = new ClaudeTreeDataProvider();
@@ -260,10 +281,11 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
 
-    vscode.window.createTreeView('claude-usage', {
-        treeDataProvider: usageTreeProvider,
-        showCollapseAll: true
+    vscode.window.createTreeView('claude-usage-monitor', {
+        treeDataProvider: usageMonitorTreeProvider,
+        showCollapseAll: false
     });
+
 
     // Create status bar item
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -285,30 +307,24 @@ export async function activate(context: vscode.ExtensionContext) {
     const commands = [
         vscode.commands.registerCommand('claude-config.sync', async () => {
             await syncCommand(repositoryManager, fileManager);
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            await tokenTracker.trackSyncOperation(workspaceFolder?.uri.fsPath);
-            usageTreeProvider.refresh();
+            usageMonitorTreeProvider.refresh();
             updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.edit', async () => {
             await editCommand(fileManager);
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            await tokenTracker.trackClaudeMdEdit(workspaceFolder?.uri.fsPath);
-            usageTreeProvider.refresh();
+            usageMonitorTreeProvider.refresh();
             updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.openConversations', () => openConversationsCommand(conversationManager, conversationViewer)),
         vscode.commands.registerCommand('claude-config.refreshConversations', () => conversationTreeProvider.refresh()),
         vscode.commands.registerCommand('claude-config.viewConversation', async (conversationSummary) => {
             await viewConversationCommand(conversationViewer, conversationSummary);
-            await tokenTracker.trackConversationView(conversationSummary.id, conversationSummary.messageCount);
-            usageTreeProvider.refresh();
+            usageMonitorTreeProvider.refresh();
             updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.exportConversation', async (conversationSummary) => {
             await exportConversationCommand(conversationManager, conversationSummary);
-            await tokenTracker.trackConversationExport(conversationSummary.id, conversationSummary.messageCount, 'single');
-            usageTreeProvider.refresh();
+            usageMonitorTreeProvider.refresh();
             updateStatusBarWithUsage();
         }),
         vscode.commands.registerCommand('claude-config.exportAllConversations', () => exportAllConversationsCommand(conversationManager)),
@@ -326,24 +342,51 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('claude-config.viewUsageStats', () => viewUsageStatsCommand()),
         vscode.commands.registerCommand('claude-config.showUsageQuickPick', () => showUsageQuickPickCommand()),
-        vscode.commands.registerCommand('claude-config.resetUsageStats', async () => {
-            const result = await vscode.window.showWarningMessage(
-                'Are you sure you want to reset all usage statistics? This action cannot be undone.',
-                'Reset',
-                'Cancel'
-            );
-            if (result === 'Reset') {
-                await tokenTracker.resetStatistics();
-                // Refresh the tree view to show updated stats
-                treeDataProvider.refresh();
-                usageTreeProvider.refresh();
-                updateStatusBarWithUsage();
+        vscode.commands.registerCommand('claude-config.debugCcusage', () => debugCcusageCommand()),
+        vscode.commands.registerCommand('claude-config.installCcusageHelp', () => installCcusageHelpCommand()),
+        vscode.commands.registerCommand('claude-config.showOutputChannel', () => {
+            if (outputChannel) {
+                outputChannel.show();
+            } else {
+                vscode.window.showErrorMessage('Output channel not initialized');
             }
         }),
-        vscode.commands.registerCommand('claude-config.debugTokenTracker', () => debugTokenTrackerCommand()),
         vscode.commands.registerCommand('claude-config.refreshUsage', () => {
-            usageTreeProvider.refresh();
+            usageMonitorTreeProvider.refresh();
             updateStatusBarWithUsage();
+        }),
+        vscode.commands.registerCommand('claude-config.refreshTokenWindow', async () => {
+            // Force refresh the token window monitor
+            const tokenWindowMonitor = (await import('./components/TokenWindowMonitor')).TokenWindowMonitor.getInstance();
+            tokenWindowMonitor.clearCache();
+            await tokenWindowMonitor.getCurrentWindow();
+            usageMonitorTreeProvider.refresh();
+        }),
+        
+        // Integrated cloud sync commands
+        vscode.commands.registerCommand('claude-config.syncToCloud', () => syncToCloudCommand(context, conversationManager)),
+        vscode.commands.registerCommand('claude-config.openCloudSettings', () => openCloudSettingsCommand(context)),
+        
+        
+        // Summary-based search commands
+        vscode.commands.registerCommand('claude-config.searchConversations', () => searchConversationsCommand()),
+        vscode.commands.registerCommand('claude-config.advancedSearchConversations', () => advancedSearchConversationsCommand()),
+        vscode.commands.registerCommand('claude-config.searchSuggestions', () => searchSuggestionsCommand()),
+        
+        // Analytics commands
+        vscode.commands.registerCommand('claude-config.viewAnalytics', () => viewAnalyticsCommand()),
+        vscode.commands.registerCommand('claude-config.viewAnalyticsSummary', () => viewAnalyticsSummaryCommand()),
+        
+        // Cache management commands
+        vscode.commands.registerCommand('claude-config.clearSummaryCache', () => {
+            SummaryCacheManager.getInstance().clear();
+            conversationTreeProvider.refresh();
+            vscode.window.showInformationMessage('Summary cache cleared');
+        }),
+        vscode.commands.registerCommand('claude-config.viewCacheStats', () => {
+            const stats = SummaryCacheManager.getInstance().getStats();
+            const message = `Cache Stats:\n• Entries: ${stats.totalEntries}\n• Hit Ratio: ${(stats.hitRatio * 100).toFixed(1)}%\n• Memory: ${(stats.memoryUsage / 1024).toFixed(1)}KB`;
+            vscode.window.showInformationMessage(message);
         })
     ];
 
@@ -382,17 +425,6 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 }
 
-export function deactivate() {
-    if (fileManager) {
-        fileManager.stopWatching();
-    }
-    if (conversationViewer) {
-        conversationViewer.dispose();
-    }
-    if (tokenTracker) {
-        tokenTracker.dispose();
-    }
-}
 
 export function updateStatusBar(message: string, isError: boolean = false) {
     if (statusBarItem) {
@@ -408,53 +440,53 @@ function updateStatusBarWithUsage() {
     
     try {
         const config = vscode.workspace.getConfiguration('claude-config');
-        const showPercentage = config.get<boolean>('usageTracking.showPercentage', true);
+        const showUsageInStatusBar = config.get<boolean>('usageTracking.showInStatusBar', false);
         
-        if (!showPercentage) {
+        if (!showUsageInStatusBar) {
             statusBarItem.text = "$(sync) Claude Config";
             statusBarItem.tooltip = "Claude Config Manager - Click for usage statistics";
             return;
         }
         
-        const percentage = tokenTracker.getCurrentUsagePercentage();
-        const usageStatus = tokenTracker.getUsageStatus();
-        const resetTime = tokenTracker.getTimeUntilReset();
-        
-        // Choose icon based on usage status
-        let icon: string;
-        let statusColor: string = '';
-        
-        switch (usageStatus) {
-            case 'critical':
-                icon = '🚨';
-                statusColor = ' (Critical)';
-                break;
-            case 'warning':
-                icon = '⚠️';
-                statusColor = ' (Warning)';
-                break;
-            default:
-                icon = '📊';
-                break;
-        }
-        
-        // Format reset time
-        let resetText = '';
-        if (resetTime.days > 0) {
-            resetText = ` (${resetTime.days}d ${resetTime.hours}h)`;
-        } else if (resetTime.hours > 0) {
-            resetText = ` (${resetTime.hours}h ${resetTime.minutes}m)`;
-        } else {
-            resetText = ` (${resetTime.minutes}m)`;
-        }
-        
-        // Update status bar text
-        statusBarItem.text = `${icon} Claude: ${percentage.toFixed(1)}%${statusColor}${resetText}`;
-        statusBarItem.tooltip = `Claude Usage: ${percentage.toFixed(1)}% of daily estimate\nResets in: ${resetTime.days}d ${resetTime.hours}h ${resetTime.minutes}m\nClick for detailed statistics`;
+        // Simple status bar showing ccusage availability
+        statusBarItem.text = "$(graph) Claude Usage";
+        statusBarItem.tooltip = "Claude Usage Monitor (powered by ccusage) - Click for detailed statistics";
         
     } catch (error) {
-        // Fallback to simple display if tokenTracker not ready
+        // Fallback to simple display
         statusBarItem.text = "$(sync) Claude Config";
         statusBarItem.tooltip = "Claude Config Manager - Click for usage statistics";
+    }
+}
+
+export function deactivate() {
+    // Clean up file manager
+    if (fileManager) {
+        fileManager.stopWatching();
+    }
+    
+    // Clean up conversation viewer
+    if (conversationViewer) {
+        conversationViewer.dispose();
+    }
+    
+    // Clean up usage monitor
+    if (usageMonitorTreeProvider) {
+        usageMonitorTreeProvider.dispose();
+    }
+    
+    
+    // Clean up summary cache
+    SummaryCacheManager.dispose();
+    
+    
+    // Dispose status bar item
+    if (statusBarItem) {
+        statusBarItem.dispose();
+    }
+    
+    // Dispose output channel
+    if (outputChannel) {
+        outputChannel.dispose();
     }
 }
