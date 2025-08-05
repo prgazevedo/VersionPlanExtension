@@ -327,6 +327,13 @@ The extension provides comprehensive WebDAV cloud synchronization capabilities:
 
 ## Recent Updates
 
+### v3.3.4 - Security Fix & Dependency Updates
+
+- **🔒 Security Fix**: Replaced MD5 with SHA256 in SummaryCache for cryptographic security compliance
+- **📦 Dependencies Updated**: Updated @eslint/js to 9.32.0 and 13 other development dependencies
+- **✅ CodeQL Compliance**: Resolved security alert for weak cryptographic algorithm usage
+- **🛡️ Enhanced Security**: All Dependabot security alerts resolved
+
 ### v3.3.3 - ccusage Loading Experience Improvements
 
 - **🚀 Improved Loading State**: Added immediate loading spinner with theme-aware animation for ccusage initialization
