@@ -283,13 +283,13 @@ This extension primarily operates locally and does not collect or transmit any t
 - Store credentials in plain text (uses VSCode SecretStorage API)
 
 ### Security Features
-- **Automatic .gitignore Protection**: Adds security rules to prevent private conversation data from being committed
-- **Path Sanitization**: Input validation and sanitization to prevent path traversal attacks
-- **Repository Validation**: Repository URL validation to prevent malicious Git operations
-- **Secure Sync Operations**: Only team-sharable files (.claude/.plans/, .claude/settings.json, .claude/commands/) are synced to Git
-- **Private File Detection**: Validates that no private files (.claude/.chats/, .claude/settings.local.json) are committed
-- **Secure File Operations**: All operations within workspace boundaries with proper error handling
-- **GitHub Push Protection**: Compliance with GitHub's push protection for secret detection
+- **Automatic .gitignore Protection**: Automatically adds rules to prevent conversation data (.claude/.chats/) from being committed
+- **Path Sanitization**: Input validation to prevent path traversal attacks when handling file paths
+- **Repository Validation**: Validates Git URLs to block malicious repositories and private IPs
+- **Secure Sync Operations**: Only syncs team-sharable files (.claude/.plans/, CLAUDE.md) to Git
+- **Private File Detection**: Blocks commits if private files (.claude/.chats/, settings.local.json) are staged
+- **Secure Credential Storage**: WebDAV credentials stored using VSCode's SecretStorage API
+- **Error Message Sanitization**: Removes sensitive information from error messages before display
 
 For security issues, please report them privately via GitHub's security advisory feature.
 
