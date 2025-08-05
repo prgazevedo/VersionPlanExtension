@@ -324,11 +324,11 @@
     "@types/fs-extra": "^11.0.4",
     "@types/node": "24.x",
     "@types/vscode": "^1.74.0",
-    "@typescript-eslint/eslint-plugin": "^8.37.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.37.0",
-    "eslint": "^9.31.0",
+    "eslint": "^9.32.0",
     "sharp": "^0.34.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "fs-extra": "^11.1.1",
