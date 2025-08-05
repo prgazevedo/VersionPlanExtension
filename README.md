@@ -261,18 +261,26 @@ your-project/
 ## Privacy & Security
 
 ### Privacy Statement
-This extension operates entirely locally and does not collect, transmit, or store any personal data or telemetry. All operations are performed on your local machine and your own Git repositories.
+This extension primarily operates locally and does not collect or transmit any telemetry or analytics data. The extension offers optional cloud synchronization features that you can choose to enable.
 
-**What the extension does:**
+**Local Operations (Default):**
 - Reads and writes CLAUDE.md files in your workspace
-- Performs Git operations (add, commit, push) using your existing Git configuration
-- Creates files from templates using locally provided information
+- Parses conversation history from local Claude Code storage
+- Performs Git operations using your existing Git configuration
+- All data processing happens on your local machine
+
+**Optional Cloud Features (User-Configured):**
+- **WebDAV Sync**: If enabled, can sync conversations and usage data to your own WebDAV server (Nextcloud, ownCloud, etc.)
+- **Your Control**: Cloud sync is disabled by default and requires explicit configuration
+- **Your Infrastructure**: Uses only the WebDAV server you specify - no third-party services
+- **Encrypted Option**: Supports optional AES-256-GCM encryption for sensitive data
 
 **What the extension does NOT do:**
-- Collect usage statistics or telemetry
-- Send data to external servers (except standard Git operations to your configured repository)
-- Access files outside your workspace
-- Store credentials or personal information
+- Collect usage statistics or telemetry for the developer
+- Send data to any servers we control
+- Share your data with third parties
+- Use cloud services without your explicit configuration
+- Store credentials in plain text (uses VSCode SecretStorage API)
 
 ### Security Features
 - **Automatic .gitignore Protection**: Adds security rules to prevent private conversation data from being committed
