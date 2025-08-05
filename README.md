@@ -4,46 +4,33 @@ A comprehensive VSCode extension for Claude Code workflows, featuring CLAUDE.md 
 
 ## Features
 
-### 🔧 CLAUDE.md Management
-- **Automatic Rule Injection**: Automatically adds PROJECT_PLAN integration instructions to CLAUDE.md when detected
-- **Git Integration**: Sync CLAUDE.md files directly to your workspace's existing Git repository
-- **Auto-Sync**: Automatically sync CLAUDE.md changes to Git with smart commit detection
-- **File Watching**: Monitor CLAUDE.md files for changes and sync automatically
-- **Status Tracking**: Status bar indicator showing sync status and progress
+### 📊 ccusage-Powered Usage Tracking
+- Real-time token usage and costs powered by [ccusage](https://github.com/ryoppippi/ccusage)
+- Detailed breakdown: input, output, cache creation, and cache read tokens
+- Automatic model detection (Opus, Sonnet, Haiku)
+- Smart package manager fallback (bunx → npx → npm exec)
+
+### ☁️ Conversation Sync (WebDAV)
+- Sync conversations to your own Nextcloud, ownCloud, or WebDAV server
+- Optional AES-256-GCM encryption for sensitive data
+- Cross-device usage statistics aggregation
+- Full control over your data location
 
 ### 📚 Conversation History Browser
-- **Rich Conversation Viewer**: Browse Claude Code conversation history with an intuitive webview interface
-- **Project Organization**: Conversations grouped by project with expandable tree structure
-- **Enhanced Search**: Sticky search bar at bottom with highlighting, navigation buttons, keyboard shortcuts, and automatic scrolling
-- **Advanced Controls**: Expand All and Collapse All buttons for quick conversation management
-- **Optimized Metadata Layout**: Asymmetrical two-section design with compact display for short values and dedicated space for longer content
-- **Multiple Export Formats**: Export conversations to Markdown, JSON, or plain text
-- **Security-First**: Automatic .gitignore rules to prevent private conversation data from being committed
+- Browse and search Claude Code conversation history
+- Project-organized tree view with rich webview interface
+- Export to Markdown, JSON, or plain text
+- Advanced search with highlighting and keyboard shortcuts
 
-### 🎯 PROJECT_PLAN Integration
-- **Intelligent Planning**: Automatic PROJECT_PLAN.md creation with CLAUDE.md integration
-- **Plan Mode Integration**: PROJECT_PLAN.md serves as the central repository for Claude Code plan mode sessions
-- **Persistent Context**: Maintains project knowledge continuity across different Claude Code sessions
-- **Template-Based**: Pre-structured project plan template covering architecture, setup, and workflows
-- **Manual Override**: Manual command available if automatic rule addition is needed
+### 🔧 CLAUDE.md & PROJECT_PLAN Management
+- Automatic PROJECT_PLAN.md integration with CLAUDE.md
+- Git sync for team-sharable configuration
+- Auto-sync with file watching
+- Plan mode session persistence
 
-### 📊 ccusage-Powered Usage Tracking
-- **Accurate Usage Data**: Powered by [ccusage](https://github.com/ryoppippi/ccusage) for reliable Claude Code usage tracking
-- **Real-Time Statistics**: Today's tokens, costs, and model usage with automatic refresh
-- **Token Breakdown**: Detailed breakdown of input, output, cache creation, and cache read tokens
-- **Model Detection**: Automatic detection of Claude models used (Opus, Sonnet, etc.)
-- **Smart Installation**: Automatic fallback across package managers (bunx → npx → npm exec)
-- **User-Friendly Setup**: Built-in installation guide for Bun, Node.js, or VS Code extensions
-- **Clean Error Handling**: Clear guidance when ccusage is unavailable, no broken fallbacks
+## Overview
 
-### ☁️ WebDAV Cloud Sync
-- **Self-Hosted Cloud Storage**: Sync conversations and usage statistics to your own WebDAV server
-- **Multiple Server Support**: Compatible with Nextcloud, ownCloud, and any WebDAV-compatible server
-- **Secure Authentication**: Username/password authentication with SSL certificate validation
-- **Optional Encryption**: AES-256-GCM encryption for sensitive conversation data before upload
-- **Bidirectional Sync**: Smart merge of local and remote data with conflict resolution
-- **Cross-Device Usage**: Multi-device usage statistics aggregation and synchronization
-- **Privacy-First**: Full control over your data location and access
+Claude Config Manager is a comprehensive workflow extension for Claude Code users. It provides accurate usage tracking through ccusage integration, enables secure conversation synchronization to your own cloud storage, offers a powerful conversation history browser, and manages CLAUDE.md configuration files with automatic Git integration. All features work together to create a seamless Claude Code development experience while maintaining full privacy and control over your data.
 
 ## Installation
 
@@ -222,20 +209,41 @@ To get debug information:
 
 ## How It Works
 
-### CLAUDE.md Management
-The extension works directly with your workspace's existing Git repository:
-- Syncs team-sharable Claude configuration to your workspace Git repository
-- No additional repository setup required
-- Uses your existing Git configuration and remote repository
-- Commits are made directly to your project's Git history
-- Automatically excludes private conversation data via .gitignore rules
+### ccusage-Powered Usage Tracking
+The extension integrates with the ccusage CLI tool for accurate Claude Code usage monitoring:
+- **Smart Installation**: Automatically tries bunx (fastest), falls back to npx, then npm exec
+- **Real-Time Data**: Displays today's tokens, costs, and model usage with 30-second caching
+- **Detailed Breakdown**: Shows input/output tokens, cache creation/read statistics
+- **Model Detection**: Identifies which Claude models were used (Opus, Sonnet, Haiku)
+- **No Pre-Installation**: Works without requiring ccusage to be pre-installed
+- **Clean Error Handling**: Provides helpful installation guidance when package managers are unavailable
+
+### WebDAV Cloud Sync
+Secure conversation and usage data synchronization to your own cloud storage:
+- **Server Compatibility**: Works with Nextcloud, ownCloud, and any WebDAV-compatible server
+- **Security Features**: Optional AES-256-GCM encryption, secure credential storage via VSCode API
+- **Bidirectional Sync**: Smart merge of local and remote data with conflict resolution
+- **Cross-Device Stats**: Aggregates usage statistics across multiple devices
+- **Privacy-First**: All data stays on your infrastructure - no third-party services involved
+- **Flexible Configuration**: Supports self-signed certificates and custom WebDAV paths
 
 ### Conversation History Browser
-- Reads JSONL conversation files from Claude Code's local storage (`~/.claude/projects/`)
-- Parses conversation metadata including timestamps, message counts, and project context
-- Groups conversations by project for organized browsing
-- Provides rich webview interface with VSCode theme integration
-- Offers multiple export formats while preserving conversation structure
+Rich conversation management with advanced features:
+- **Data Source**: Reads JSONL files from Claude Code's local storage (`~/.claude/projects/`)
+- **Project Organization**: Groups conversations by project with expandable tree structure
+- **Rich Viewer**: Webview interface with VSCode theme integration and syntax highlighting
+- **Advanced Search**: Sticky search bar with highlighting, navigation buttons, and keyboard shortcuts
+- **Enhanced Controls**: Expand All/Collapse All buttons for quick conversation management
+- **Export Options**: Multiple formats (Markdown, JSON, plain text) while preserving structure
+- **Security**: Automatic .gitignore rules prevent private conversation data from being committed
+
+### CLAUDE.md Management
+The extension works directly with your workspace's existing Git repository:
+- **Auto-Sync**: Monitor CLAUDE.md files for changes and sync automatically to Git
+- **Git Integration**: Uses your existing Git configuration and remote repository
+- **Team-Sharable Only**: Syncs only appropriate files (.claude/.plans/, CLAUDE.md)
+- **Security Validation**: Blocks commits if private files are accidentally staged
+- **Status Tracking**: Status bar indicator showing sync status and progress
 
 ### PROJECT_PLAN Integration
 When CLAUDE.md is detected in your workspace:
