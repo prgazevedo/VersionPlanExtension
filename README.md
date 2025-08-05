@@ -303,6 +303,13 @@ For security issues, please report them privately via GitHub's security advisory
 
 ## Changelog
 
+### v3.3.4 - Security Fix & Dependency Updates
+- **🔒 Security Fix**: Replaced MD5 with SHA256 in SummaryCache for cryptographic security compliance
+- **📦 Dependencies Updated**: Updated @eslint/js to 9.32.0 and 13 other development dependencies
+- **✅ CodeQL Compliance**: Resolved security alert for weak cryptographic algorithm usage
+- **🛡️ Enhanced Security**: All Dependabot security alerts resolved
+- **📝 Documentation Updates**: Improved privacy statement transparency and streamlined Features section
+
 ### v3.3.3 - ccusage Loading Experience Improvements
 - **🚀 Improved Loading State**: Added immediate loading spinner for ccusage initialization
 - **📊 Progressive Feedback**: Shows "Initializing ccusage..." with extended message after 10 seconds
