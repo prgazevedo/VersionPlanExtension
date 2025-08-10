@@ -1,5 +1,5 @@
 /**
- * Analytics commands - removed in v3.3.2 for core focus
+ * Analytics commands - redirects to usage statistics
  */
 
 import * as vscode from 'vscode';
@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
  */
 export async function viewAnalyticsCommand(): Promise<void> {
     vscode.window.showInformationMessage(
-        'Analytics functionality has been removed in v3.3.2 to focus on core features. Use the usage statistics instead.',
+        'Analytics feature redirects to usage statistics for better focus. Use the usage statistics for detailed insights.',
         'View Usage Stats'
     ).then(selection => {
         if (selection === 'View Usage Stats') {
@@ -23,7 +23,7 @@ export async function viewAnalyticsCommand(): Promise<void> {
  */
 export async function viewAnalyticsSummaryCommand(): Promise<void> {
     vscode.window.showInformationMessage(
-        'Analytics functionality has been removed in v3.3.2 to focus on core features. Use the usage statistics instead.',
+        'Analytics feature redirects to usage statistics for better focus. Use the usage statistics for detailed insights.',
         'View Usage Stats'
     ).then(selection => {
         if (selection === 'View Usage Stats') {

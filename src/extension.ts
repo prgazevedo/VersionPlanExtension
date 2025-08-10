@@ -13,11 +13,12 @@ import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
 import { viewUsageStatsCommand, showUsageQuickPickCommand, debugCcusageCommand, installCcusageHelpCommand } from './commands/usage';
-import { syncToCloudCommand, openCloudSettingsCommand } from './commands/cloudSyncIntegrated';
+import { syncToCloudCommand, openCloudSettingsCommand, setWebDAVPasswordCommand, debugWebDAVCredentialsCommand } from './commands/cloudSyncIntegrated';
 import { searchConversationsCommand, advancedSearchConversationsCommand, searchSuggestionsCommand } from './commands/searchConversations';
 import { viewAnalyticsCommand, viewAnalyticsSummaryCommand } from './commands/viewAnalytics';
 import { GitignoreManager } from './utils/GitignoreManager';
 import { SummaryCacheManager } from './conversation/SummaryCache';
+import { Logger } from './utils/Logger';
 
 let repositoryManager: RepositoryManager;
 let fileManager: ClaudeFileManager;
@@ -373,6 +374,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Create output channel for debugging
     outputChannel = vscode.window.createOutputChannel('Claude Config Manager');
     outputChannel.appendLine('Claude Config Manager activated');
+    
+    // Set the output channel for all loggers
+    Logger.setOutputChannel(outputChannel);
     // Don't auto-show output channel to reduce noise
     
     // Override console.log to also output to our channel (for errors and important messages)
@@ -519,6 +523,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('claude-config.showUsageQuickPick', () => showUsageQuickPickCommand()),
         vscode.commands.registerCommand('claude-config.debugCcusage', () => debugCcusageCommand()),
         vscode.commands.registerCommand('claude-config.installCcusageHelp', () => installCcusageHelpCommand()),
+        vscode.commands.registerCommand('claude-config.debugWebDAVCredentials', () => debugWebDAVCredentialsCommand(context)),
         vscode.commands.registerCommand('claude-config.showOutputChannel', () => {
             if (outputChannel) {
                 outputChannel.show();
@@ -541,6 +546,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Integrated cloud sync commands
         vscode.commands.registerCommand('claude-config.syncToCloud', () => syncToCloudCommand(context, conversationManager)),
         vscode.commands.registerCommand('claude-config.openCloudSettings', () => openCloudSettingsCommand(context)),
+        vscode.commands.registerCommand('claude-config.setWebDAVPassword', () => setWebDAVPasswordCommand(context)),
         
         
         // Summary-based search commands
@@ -612,6 +618,11 @@ export async function activate(context: vscode.ExtensionContext) {
                     });
                 }
             }
+        }
+        
+        if (event.affectsConfiguration('claude-config.cloudSync')) {
+            // Refresh tree view when cloud sync configuration changes
+            treeDataProvider.refresh();
         }
     });
 }

@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, PROJECT_PLAN integration with Git, ccusage-powered usage tracking, and WebDAV cloud synchronization",
-  "version": "3.3.4",
+  "version": "3.4.0",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -152,6 +152,12 @@
         "title": "Install Context7 MCP Help",
         "category": "Claude Config",
         "icon": "$(question)"
+      },
+      {
+        "command": "claude-config.setWebDAVPassword",
+        "title": "Set WebDAV Password",
+        "category": "Claude Config",
+        "icon": "$(key)"
       }
     ],
     "viewsContainers": {
@@ -176,10 +182,6 @@
         {
           "id": "claude-usage-monitor",
           "name": "CCUsage Monitor"
-        },
-        {
-          "id": "claude-cloud-sync",
-          "name": "Cloud Sync"
         }
       ]
     },
@@ -207,10 +209,6 @@
       {
         "view": "claude-usage-monitor",
         "contents": "Real-time Claude usage monitoring powered by ccusage.\nShows actual token usage, costs, and model breakdowns.\n[Install ccusage Help](command:claude-config.installCcusageHelp) | [Debug Integration](command:claude-config.debugCcusage)"
-      },
-      {
-        "view": "claude-cloud-sync",
-        "contents": "WebDAV cloud synchronization for conversations and usage statistics.\nSync your Claude data across devices using Nextcloud, ownCloud, or any WebDAV server.\n[Setup Cloud Sync](command:claude-config.openCloudSettings) | [Sync to Cloud](command:claude-config.syncToCloud)"
       }
     ],
     "configuration": {
@@ -247,6 +245,12 @@
         "claude-config.cloudSync.webdav.username": {
           "type": "string",
           "description": "WebDAV username"
+        },
+        "claude-config.cloudSync.webdav.passwordButton": {
+          "type": "string",
+          "markdownDescription": "**[Set WebDAV Password](command:claude-config.setWebDAVPassword)** - Securely store your WebDAV password",
+          "default": "Click 'Set WebDAV Password' to configure authentication",
+          "readOnly": true
         },
         "claude-config.cloudSync.webdav.basePath": {
           "type": "string",
@@ -324,6 +328,24 @@
           "enum": ["local", "remote", "ask"],
           "default": "ask",
           "description": "Default conflict resolution strategy"
+        },
+        "claude-config.cloudSync.deviceId": {
+          "type": "string",
+          "description": "Unique device identifier for cloud sync (auto-generated)"
+        },
+        "claude-config.cloudSync.lastSyncTime": {
+          "type": "string",
+          "description": "Timestamp of last successful sync (auto-updated)"
+        },
+        "claude-config.cloudSync.smartSyncRecentDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Number of recent days to include full conversations in smart sync"
+        },
+        "claude-config.cloudSync.smartSyncMinMessages": {
+          "type": "number",
+          "default": 10,
+          "description": "Minimum message count to include full conversation in smart sync"
         }
       }
     }
@@ -345,10 +367,14 @@
     "@typescript-eslint/parser": "^8.37.0",
     "eslint": "^9.32.0",
     "sharp": "^0.34.3",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@types/xml2js": "^0.4.14",
+    "@types/node-fetch": "^2.6.11"
   },
   "dependencies": {
     "fs-extra": "^11.1.1",
-    "simple-git": "^3.19.1"
+    "simple-git": "^3.19.1",
+    "node-fetch": "^2.7.0",
+    "xml2js": "^0.6.2"
   }
 }

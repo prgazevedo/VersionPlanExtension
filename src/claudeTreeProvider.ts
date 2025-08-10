@@ -18,7 +18,7 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
 
     async getChildren(element?: ClaudeTreeItem): Promise<ClaudeTreeItem[]> {
         if (element && element.itemType === 'section' && element.label === 'Usage Statistics') {
-            return this.getUsageStatisticsChildren();
+            return await this.getUsageStatisticsChildren();
         }
 
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
@@ -87,6 +87,29 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             ));
         }
 
+        // Context7 actions
+        items.push(new ClaudeTreeItem(
+            'Toggle Context7',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.toggleContext7',
+                title: 'Toggle Context7 Auto-Append',
+                arguments: []
+            },
+            'link'
+        ));
+
+        items.push(new ClaudeTreeItem(
+            'Context7 Setup Help',
+            vscode.TreeItemCollapsibleState.None,
+            {
+                command: 'claude-config.installContext7Help',
+                title: 'Context7 Installation Help',
+                arguments: []
+            },
+            'question'
+        ));
+
         // Cloud sync action (replaces export all conversations)
         items.push(new ClaudeTreeItem(
             'Sync to Cloud',
@@ -99,17 +122,8 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
             'cloud-upload'
         ));
 
-        // Cloud settings action
-        items.push(new ClaudeTreeItem(
-            'Cloud Settings',
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.openCloudSettings',
-                title: 'Open Cloud Settings',
-                arguments: []
-            },
-            'settings-gear'
-        ));
+        // Cloud settings action with status indicator
+        items.push(await this.createCloudSettingsItem());
 
         // Usage statistics section
         items.push(new ClaudeTreeItem(
@@ -123,7 +137,88 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         return items;
     }
 
-    private getUsageStatisticsChildren(): ClaudeTreeItem[] {
+    private async createCloudSettingsItem(): Promise<ClaudeTreeItem> {
+        try {
+            // Check if cloud sync is configured
+            const config = vscode.workspace.getConfiguration('claude-config.cloudSync');
+            const enabled = config.get<boolean>('enabled', false);
+            const serverUrl = config.get<string>('webdav.serverUrl', '');
+            const username = config.get<string>('webdav.username', '');
+            
+            // Check if we have basic configuration
+            const hasBasicConfig = enabled && serverUrl && username;
+            
+            if (hasBasicConfig) {
+                // Check if we have secure credentials
+                try {
+                    const { CloudAuthManager } = await import('./cloud/CloudAuthManager');
+                    const authManager = CloudAuthManager.getInstance();
+                    const hasCredentials = await authManager.hasCredentials('webdav');
+                    
+                    if (hasCredentials) {
+                        return new ClaudeTreeItem(
+                            'Cloud Settings ✓',
+                            vscode.TreeItemCollapsibleState.None,
+                            {
+                                command: 'claude-config.openCloudSettings',
+                                title: 'Open Cloud Settings',
+                                arguments: []
+                            },
+                            'cloud'
+                        );
+                    } else {
+                        return new ClaudeTreeItem(
+                            'Cloud Settings ⚠',
+                            vscode.TreeItemCollapsibleState.None,
+                            {
+                                command: 'claude-config.openCloudSettings',
+                                title: 'Complete Cloud Setup',
+                                arguments: []
+                            },
+                            'warning'
+                        );
+                    }
+                } catch (error) {
+                    // Fallback if CloudAuthManager is not available
+                    return new ClaudeTreeItem(
+                        'Cloud Settings ⚠',
+                        vscode.TreeItemCollapsibleState.None,
+                        {
+                            command: 'claude-config.openCloudSettings',
+                            title: 'Setup Cloud Sync',
+                            arguments: []
+                        },
+                        'warning'
+                    );
+                }
+            } else {
+                return new ClaudeTreeItem(
+                    'Cloud Settings',
+                    vscode.TreeItemCollapsibleState.None,
+                    {
+                        command: 'claude-config.openCloudSettings',
+                        title: 'Setup Cloud Sync',
+                        arguments: []
+                    },
+                    'settings-gear'
+                );
+            }
+        } catch (error) {
+            // Fallback in case of any errors
+            return new ClaudeTreeItem(
+                'Cloud Settings',
+                vscode.TreeItemCollapsibleState.None,
+                {
+                    command: 'claude-config.openCloudSettings',
+                    title: 'Setup Cloud Sync',
+                    arguments: []
+                },
+                'settings-gear'
+            );
+        }
+    }
+
+    private async getUsageStatisticsChildren(): Promise<ClaudeTreeItem[]> {
         const items: ClaudeTreeItem[] = [];
         
         // ccusage-powered usage statistics
@@ -177,19 +272,87 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
         ));
 
         // Add cloud sync status (simplified for tree view)
-        items.push(new ClaudeTreeItem(
-            'Cloud Sync',
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.openCloudSettings',
-                title: 'Configure Cloud Sync',
-                arguments: []
-            },
-            'cloud',
-            'cloud-status'
-        ));
+        items.push(await this.createUsageCloudSyncItem());
 
         return items;
+    }
+
+    private async createUsageCloudSyncItem(): Promise<ClaudeTreeItem> {
+        try {
+            const config = vscode.workspace.getConfiguration('claude-config.cloudSync');
+            const enabled = config.get<boolean>('enabled', false);
+            
+            if (enabled) {
+                try {
+                    const { CloudAuthManager } = await import('./cloud/CloudAuthManager');
+                    const authManager = CloudAuthManager.getInstance();
+                    const hasCredentials = await authManager.hasCredentials('webdav');
+                    const isValid = hasCredentials ? await authManager.testCredentials('webdav') : false;
+                    
+                    if (isValid) {
+                        return new ClaudeTreeItem(
+                            'Cloud Sync ✓',
+                            vscode.TreeItemCollapsibleState.None,
+                            {
+                                command: 'claude-config.syncToCloud',
+                                title: 'Sync to Cloud',
+                                arguments: []
+                            },
+                            'cloud',
+                            'cloud-status'
+                        );
+                    } else {
+                        return new ClaudeTreeItem(
+                            'Cloud Sync ⚠',
+                            vscode.TreeItemCollapsibleState.None,
+                            {
+                                command: 'claude-config.openCloudSettings',
+                                title: 'Fix Cloud Configuration',
+                                arguments: []
+                            },
+                            'warning',
+                            'cloud-status'
+                        );
+                    }
+                } catch (error) {
+                    return new ClaudeTreeItem(
+                        'Cloud Sync ⚠',
+                        vscode.TreeItemCollapsibleState.None,
+                        {
+                            command: 'claude-config.openCloudSettings',
+                            title: 'Configure Cloud Sync',
+                            arguments: []
+                        },
+                        'warning',
+                        'cloud-status'
+                    );
+                }
+            } else {
+                return new ClaudeTreeItem(
+                    'Cloud Sync',
+                    vscode.TreeItemCollapsibleState.None,
+                    {
+                        command: 'claude-config.openCloudSettings',
+                        title: 'Configure Cloud Sync',
+                        arguments: []
+                    },
+                    'cloud-outline',
+                    'cloud-status'
+                );
+            }
+        } catch (error) {
+            return new ClaudeTreeItem(
+                'Cloud Sync',
+                vscode.TreeItemCollapsibleState.None,
+                {
+                    command: 'claude-config.openCloudSettings',
+                    title: 'Configure Cloud Sync',
+                    arguments: []
+                },
+                'cloud-outline',
+                'cloud-status'
+            );
+        }
     }
 }
 

@@ -1,10 +1,13 @@
 /**
- * Enhanced ConversationManager with cloud sync capabilities
- * Extends the existing ConversationManager to add multi-provider cloud sync
+ * Enhanced ConversationManager with WebDAV cloud sync capabilities
+ * Provides real cloud synchronization for conversations and summaries
  */
 
 import * as vscode from 'vscode';
 import { ConversationManager } from '../conversation/ConversationManager';
+import { CloudSyncService, SyncOptions, SyncResult, SyncProgress } from './CloudSyncService';
+import { CloudAuthManager } from './CloudAuthManager';
+import { loggers } from '../utils/Logger';
 
 export interface CloudSyncResult {
     success: boolean;
@@ -34,74 +37,89 @@ export interface SyncStatus {
 }
 
 /**
- * Enhanced ConversationManager with cloud sync capabilities
+ * Enhanced ConversationManager with WebDAV cloud sync capabilities
  */
 export class CloudConversationManager extends ConversationManager {
-    private cloudProviders = new Map<string, any>();
-    private syncStatus = new Map<string, SyncStatus>();
+    private cloudSyncService: CloudSyncService;
+    private authManager: CloudAuthManager;
     private syncInProgress = false;
-    private onSyncEventEmitter = new vscode.EventEmitter<any>();
+    private lastSyncResults: SyncResult[] = [];
+    private onSyncEventEmitter = new vscode.EventEmitter<SyncProgress>();
     public onSyncEvent = this.onSyncEventEmitter.event;
 
     constructor(context: vscode.ExtensionContext) {
         super(context);
-    }
-
-    /**
-     * Register a cloud provider for sync operations
-     */
-    addCloudProvider(provider: any): void {
-        this.cloudProviders.set(provider.providerType, provider);
-        this.syncStatus.set(provider.providerType, {
-            provider: provider.providerType,
-            status: 'idle',
-            totalConversations: 0,
-            syncedConversations: 0
+        this.authManager = CloudAuthManager.getInstance(context);
+        this.cloudSyncService = new CloudSyncService(this, this.authManager);
+        
+        // Set up progress tracking
+        this.cloudSyncService.setProgressCallback((progress) => {
+            this.onSyncEventEmitter.fire(progress);
         });
     }
 
     /**
-     * Remove a cloud provider
+     * Get WebDAV provider status
      */
-    removeCloudProvider(providerType: string): void {
-        this.cloudProviders.delete(providerType);
-        this.syncStatus.delete(providerType);
+    async getWebDAVProvider(): Promise<CloudProvider> {
+        const hasCredentials = await this.authManager.hasCredentials('webdav');
+        const isValid = hasCredentials ? await this.authManager.testCredentials('webdav') : false;
+        
+        return {
+            providerType: 'webdav',
+            displayName: 'WebDAV (Nextcloud, ownCloud)',
+            isAuthenticated: isValid
+        };
     }
 
     /**
      * Get all registered cloud providers
      */
-    getCloudProviders(): CloudProvider[] {
-        return Array.from(this.cloudProviders.values()).map(provider => ({
-            providerType: provider.providerType,
-            displayName: provider.displayName || provider.providerType,
-            isAuthenticated: provider.isAuthenticated || false
-        }));
+    async getCloudProviders(): Promise<CloudProvider[]> {
+        return [await this.getWebDAVProvider()];
     }
 
     /**
      * Get sync status for all providers
      */
     getSyncStatus(): SyncStatus[] {
-        return Array.from(this.syncStatus.values());
+        const webdavStatus: SyncStatus = {
+            provider: 'webdav',
+            status: this.syncInProgress ? 'syncing' : 'idle',
+            totalConversations: this.lastSyncResults.length,
+            syncedConversations: this.lastSyncResults.filter(r => r.success).length
+        };
+
+        return [webdavStatus];
     }
 
     /**
      * Get sync statistics
      */
-    getSyncStatistics(): SyncStatistics {
-        // Stub implementation - cloud sync functionality removed in v3.3.2
+    async getSyncStatistics(): Promise<SyncStatistics> {
+        const conversations = await this.getAvailableConversations(false);
+        const totalConversations = conversations.length;
+        
+        // Count conversations with cloud sync metadata
+        const syncedConversations = conversations.filter(c => c.isFromCloud || c.cloudSyncMetadata).length;
+        const conflictedConversations = this.lastSyncResults.filter(r => r.conflictResolved).length;
+        const pendingConversations = totalConversations - syncedConversations;
+        
+        // Get last sync time from configuration
+        const config = vscode.workspace.getConfiguration('claude-config.cloudSync');
+        const lastSyncTime = config.get<string>('lastSyncTime');
+
         return {
-            totalConversations: 0,
-            syncedConversations: 0,
-            conflictedConversations: 0,
-            pendingConversations: 0,
-            lastSyncTime: undefined
+            totalConversations,
+            syncedConversations,
+            conflictedConversations,
+            pendingConversations,
+            lastSyncTime: lastSyncTime ? new Date(lastSyncTime) : undefined
         };
     }
 
     /**
-     * Sync conversations to all enabled cloud providers
+     * Sync conversations to cloud (upload)
      */
     async syncToCloud(options: any = {}): Promise<CloudSyncResult[]> {
         if (this.syncInProgress) {
@@ -115,24 +133,54 @@ export class CloudConversationManager extends ConversationManager {
         const results: CloudSyncResult[] = [];
 
         try {
-            for (const [providerType, provider] of this.cloudProviders) {
-                if (!provider.isAuthenticated) {
-                    results.push({
-                        success: false,
-                        error: `Provider ${providerType} not authenticated`
-                    });
-                    continue;
-                }
+            const syncOptions: SyncOptions = {
+                mode: options.mode || 'summaries-only',
+                direction: 'upload',
+                forceSync: options.forceSync || false,
+                selectedProjects: options.selectedProjects
+            };
 
-                // Stub sync operation
+            const syncResults = await this.cloudSyncService.performSync(syncOptions);
+            this.lastSyncResults = syncResults;
+            
+            // Convert sync results to cloud sync results
+            for (const result of syncResults) {
                 results.push({
-                    success: true,
+                    success: result.success,
+                    error: result.error,
                     metadata: {
-                        provider: providerType,
-                        syncedCount: 0
+                        sessionId: result.sessionId,
+                        projectName: result.projectName,
+                        operation: result.operation,
+                        skipped: result.skipped,
+                        conflictResolved: result.conflictResolved
                     }
                 });
             }
+
+            // Update last sync time and show results
+            const successCount = results.filter(r => r.success).length;
+            const totalCount = results.length;
+            
+            if (successCount > 0) {
+                const config = vscode.workspace.getConfiguration('claude-config.cloudSync');
+                await config.update('lastSyncTime', new Date().toISOString(), vscode.ConfigurationTarget.Global);
+                vscode.window.showInformationMessage(`✅ Successfully synced ${successCount}/${totalCount} conversations to cloud`);
+            } else if (totalCount > 0) {
+                vscode.window.showErrorMessage(`❌ Failed to sync all ${totalCount} conversations. Check the output for details.`);
+            } else {
+                vscode.window.showInformationMessage('ℹ️ No conversations found to sync');
+            }
+
+            // Trigger conversation refresh to show updated summaries
+            this.triggerRefresh();
+
+        } catch (error: any) {
+            loggers.cloudSync.error('Upload sync failed:', error);
+            results.push({
+                success: false,
+                error: error.message || 'Upload sync failed'
+            });
         } finally {
             this.syncInProgress = false;
         }
@@ -141,7 +189,7 @@ export class CloudConversationManager extends ConversationManager {
     }
 
     /**
-     * Sync conversations from all enabled cloud providers
+     * Sync conversations from cloud (download)
      */
     async syncFromCloud(options: any = {}): Promise<CloudSyncResult[]> {
         if (this.syncInProgress) {
@@ -155,24 +203,46 @@ export class CloudConversationManager extends ConversationManager {
         const results: CloudSyncResult[] = [];
 
         try {
-            for (const [providerType, provider] of this.cloudProviders) {
-                if (!provider.isAuthenticated) {
-                    results.push({
-                        success: false,
-                        error: `Provider ${providerType} not authenticated`
-                    });
-                    continue;
-                }
+            const syncOptions: SyncOptions = {
+                mode: options.mode || 'summaries-only',
+                direction: 'download',
+                forceSync: options.forceSync || false,
+                selectedProjects: options.selectedProjects
+            };
 
-                // Stub sync operation
+            const syncResults = await this.cloudSyncService.performSync(syncOptions);
+            this.lastSyncResults = syncResults;
+            
+            // Convert sync results to cloud sync results
+            for (const result of syncResults) {
                 results.push({
-                    success: true,
+                    success: result.success,
+                    error: result.error,
                     metadata: {
-                        provider: providerType,
-                        downloadedCount: 0
+                        sessionId: result.sessionId,
+                        projectName: result.projectName,
+                        operation: result.operation,
+                        skipped: result.skipped,
+                        conflictResolved: result.conflictResolved
                     }
                 });
             }
+
+            // Update last sync time
+            if (results.some(r => r.success)) {
+                const config = vscode.workspace.getConfiguration('claude-config.cloudSync');
+                await config.update('lastSyncTime', new Date().toISOString(), vscode.ConfigurationTarget.Global);
+            }
+
+            // Trigger conversation refresh to show new summaries
+            this.triggerRefresh();
+
+        } catch (error: any) {
+            loggers.cloudSync.error('Download sync failed:', error);
+            results.push({
+                success: false,
+                error: error.message || 'Download sync failed'
+            });
         } finally {
             this.syncInProgress = false;
         }
@@ -184,16 +254,49 @@ export class CloudConversationManager extends ConversationManager {
      * Perform bidirectional sync (download then upload)
      */
     async bidirectionalSync(options: any = {}): Promise<CloudSyncResult[]> {
+        if (this.syncInProgress) {
+            return [{
+                success: false,
+                error: 'Sync already in progress'
+            }];
+        }
+
         const downloadResults = await this.syncFromCloud(options);
         const uploadResults = await this.syncToCloud(options);
+        
         return [...downloadResults, ...uploadResults];
     }
 
-    private updateSyncStatus(providerType: string, status: string, error?: string, lastSync?: Date): void {
-        const current = this.syncStatus.get(providerType);
-        if (current) {
-            current.status = status;
-            this.syncStatus.set(providerType, current);
+    /**
+     * Test cloud connection
+     */
+    async testConnection(): Promise<boolean> {
+        try {
+            return await this.cloudSyncService.testConnection();
+        } catch (error) {
+            loggers.cloudSync.error('Connection test failed:', error);
+            return false;
         }
+    }
+
+    /**
+     * Get sync progress information
+     */
+    isSyncInProgress(): boolean {
+        return this.syncInProgress;
+    }
+
+    /**
+     * Get last sync results
+     */
+    getLastSyncResults(): SyncResult[] {
+        return this.lastSyncResults;
+    }
+
+    /**
+     * Clear sync history
+     */
+    clearSyncHistory(): void {
+        this.lastSyncResults = [];
     }
 }

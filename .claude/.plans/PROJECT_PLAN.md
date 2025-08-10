@@ -241,7 +241,28 @@ Integration of ccusage CLI data into WebDAV cloud synchronization system, enabli
 
 **Expected Outcome**: ✅ **COMPLETED** - CloudTokenTracker.getStatistics() returns properly formatted UsageStatistics with real aggregations
 
-### Phase 3: Enhanced Cloud Sync Operations 📋
+### Phase 3: WebDAV Sync Optimization & Resume Capability 🚀
+**Objective**: Fix server overload issues and implement intelligent sync state tracking
+
+**Issue**: Current sync system attempts to upload all files on retry, causing server overload after ~40 uploads (500 Internal Server Error). The needsSync() function always returns true, preventing resume capability.
+
+**Required Features**:
+- Smart sync logic with hash-based change detection
+- Batch existence checking to reduce server load
+- Resume capability for failed upload sessions
+- Server error resilience with exponential backoff retry
+- Sync state metadata tracking with ETags and timestamps
+
+**Tasks**:
+- [x] Update CLAUDE.md and PROJECT_PLAN.md with optimization requirements
+- [ ] Implement batch existence checking in WebDAVProvider (checkRemoteFiles method)
+- [ ] Enhance needsSync() with proper change detection using file hashes and sync metadata
+- [ ] Add resume capability by tracking failed uploads and skipping successful ones
+- [ ] Implement exponential backoff retry logic for transient server errors (500, 408, 429)
+- [ ] Add ETag/timestamp comparison for accurate change detection
+- [ ] Test sync optimization with large conversation sets (40+ files)
+
+### Phase 4: Enhanced Cloud Sync Operations 📋
 **Objective**: Enable real usage data upload/download with WebDAV
 
 **Tasks**:

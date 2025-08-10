@@ -1,6 +1,9 @@
 /**
  * Simple logging utility with debug flags for better control over console output
+ * Now supports VS Code output channel integration
  */
+
+import * as vscode from 'vscode';
 
 interface LoggerOptions {
     prefix?: string;
@@ -10,6 +13,7 @@ interface LoggerOptions {
 export class Logger {
     private prefix: string;
     private debugEnabled: boolean;
+    private static outputChannel: vscode.OutputChannel | null = null;
 
     constructor(options: LoggerOptions = {}) {
         this.prefix = options.prefix || '';
@@ -17,11 +21,18 @@ export class Logger {
     }
 
     /**
+     * Set the VS Code output channel for all loggers
+     */
+    static setOutputChannel(outputChannel: vscode.OutputChannel): void {
+        Logger.outputChannel = outputChannel;
+    }
+
+    /**
      * Log debug messages only when debug flag is enabled
      */
     debug(message: string, ...args: any[]): void {
         if (this.debugEnabled) {
-            console.log(`${this.prefix}${message}`, ...args);
+            this.writeToOutput(`${this.prefix}${message}`, ...args);
         }
     }
 
@@ -29,21 +40,36 @@ export class Logger {
      * Log info messages (always shown)
      */
     info(message: string, ...args: any[]): void {
-        console.log(`${this.prefix}${message}`, ...args);
+        this.writeToOutput(`${this.prefix}${message}`, ...args);
     }
 
     /**
      * Log warning messages (always shown)
      */
     warn(message: string, ...args: any[]): void {
-        console.warn(`${this.prefix}${message}`, ...args);
+        this.writeToOutput(`${this.prefix}${message}`, ...args);
     }
 
     /**
      * Log error messages (always shown)
      */
     error(message: string, ...args: any[]): void {
-        console.error(`${this.prefix}${message}`, ...args);
+        this.writeToOutput(`${this.prefix}${message}`, ...args);
+    }
+
+    /**
+     * Write message to output channel or fallback to console
+     */
+    private writeToOutput(message: string, ...args: any[]): void {
+        const fullMessage = args.length > 0 ? 
+            `${message} ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' ')}` : 
+            message;
+        
+        if (Logger.outputChannel) {
+            Logger.outputChannel.appendLine(fullMessage);
+        } else {
+            console.log(fullMessage);
+        }
     }
 
     /**

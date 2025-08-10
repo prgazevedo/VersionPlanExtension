@@ -1,5 +1,5 @@
 /**
- * Search conversations commands - removed in v3.3.2 for core focus
+ * Search conversations commands - redirects to conversation browser
  */
 
 import * as vscode from 'vscode';
@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
  */
 export async function searchConversationsCommand(): Promise<void> {
     vscode.window.showInformationMessage(
-        'Advanced search functionality has been removed in v3.3.2 to focus on core features. Use the conversation browser instead.'
+        'Advanced search redirects to the conversation browser for better focus. Use the conversation browser for searching and filtering.'
     );
 }
 
@@ -18,7 +18,7 @@ export async function searchConversationsCommand(): Promise<void> {
  */
 export async function advancedSearchConversationsCommand(): Promise<void> {
     vscode.window.showInformationMessage(
-        'Advanced search functionality has been removed in v3.3.2 to focus on core features. Use the conversation browser instead.'
+        'Advanced search redirects to the conversation browser for better focus. Use the conversation browser for searching and filtering.'
     );
 }
 
@@ -27,6 +27,6 @@ export async function advancedSearchConversationsCommand(): Promise<void> {
  */
 export async function searchSuggestionsCommand(): Promise<void> {
     vscode.window.showInformationMessage(
-        'Search suggestions functionality has been removed in v3.3.2 to focus on core features. Use the conversation browser instead.'
+        'Search suggestions redirect to the conversation browser for better focus. Use the conversation browser for finding conversations.'
     );
 }

@@ -304,12 +304,23 @@ The extension provides comprehensive WebDAV cloud synchronization capabilities:
 - **ownCloud**: Open-source file sharing platform with WebDAV support
 - **Generic WebDAV**: Any WebDAV-compatible server for maximum flexibility
 
+**WebDAV Path Structure:**
+All data is organized under the configured WebDAV base path using the pattern:
+- `URL/BasePath/summaries/` - Conversation summary files (.summary.json)
+- `URL/BasePath/conversations/` - Full conversation files (.jsonl)
+- `URL/BasePath/usage/` - Usage statistics and aggregated data
+
+Example with configured base path `/DSM3/GPT_Projects/claude-config-manager/`:
+- `http://server:port/remote.php/dav/files/username/DSM3/GPT_Projects/claude-config-manager/summaries/`
+- `http://server:port/remote.php/dav/files/username/DSM3/GPT_Projects/claude-config-manager/conversations/`
+
 **Sync Capabilities:**
 
 - **Conversation History Sync**: Upload and download conversation JSONL files across devices
 - **Usage Statistics Sync**: Cross-device usage aggregation and statistics consolidation
 - **Bidirectional Sync**: Smart merge of local and remote data with conflict resolution
 - **Delta Sync**: Efficient transfer of only changed data to minimize bandwidth
+- **Automatic Directory Creation**: Creates required directory structure on WebDAV server
 
 **Security Features:**
 
@@ -326,6 +337,15 @@ The extension provides comprehensive WebDAV cloud synchronization capabilities:
 - **Settings Integration**: Cloud configuration accessible through VS Code settings panel
 
 ## Recent Updates
+
+### v3.4.0 - WebDAV Sync Optimization & Resume Capability (In Development)
+
+- **🚀 Smart Sync Logic**: Enhanced needsSync implementation with hash-based change detection to prevent unnecessary uploads
+- **📦 Batch Existence Checking**: Optimized PROPFIND operations to check multiple files efficiently, reducing server load
+- **🔄 Resume Capability**: Failed upload sessions now resume from where they left off instead of re-uploading all files
+- **⚡ Performance Improvements**: Reduced WebDAV server stress by implementing intelligent sync state tracking
+- **🛠️ Server Error Resilience**: Better handling of 500 Internal Server Errors with exponential backoff retry logic
+- **📊 Sync State Metadata**: Enhanced local sync metadata tracking with ETags and timestamps for accurate change detection
 
 ### v3.3.4 - Security Fix & Dependency Updates
 
@@ -474,3 +494,17 @@ When working on this project, always refer to and maintain the project plan loca
 - **Plan persistence**: The PROJECT_PLAN.md serves as the permanent repository for all planning work - plan mode should treat it as the single source of truth
 
 This ensures better code quality and maintains project knowledge continuity across different Claude Code sessions and plan mode iterations.
+
+
+# Context7 Integration
+# Added by Claude Config Manager Extension
+
+When responding to coding requests, automatically append "use context7" to retrieve real-time, version-specific documentation.
+
+**Instructions for Claude Code:**
+- For any prompt involving code generation, debugging, or technical questions, automatically include context7
+- This ensures you have access to the most current API documentation and examples
+- Prevents outdated or hallucinated code responses
+
+**Activation**: This rule is active. All coding prompts will trigger context7 documentation retrieval.
+**Benefits**: Real-time documentation, accurate API references, up-to-date code examples.

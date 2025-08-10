@@ -227,8 +227,14 @@ export class CloudAuthManager {
         const key = crypto.scryptSync('claude-config-manager', 'salt', 32);
         const iv = crypto.randomBytes(16);
 
+        // Create a serializable version of credentials with Date converted to ISO string
+        const serializableCredentials = {
+            ...credentials,
+            createdAt: credentials.createdAt.toISOString()
+        };
+
         const cipher = crypto.createCipheriv(algorithm, key, iv);
-        let encrypted = cipher.update(JSON.stringify(credentials), 'utf8', 'hex');
+        let encrypted = cipher.update(JSON.stringify(serializableCredentials), 'utf8', 'hex');
         encrypted += cipher.final('hex');
 
         // Get the authentication tag for GCM mode
@@ -270,7 +276,14 @@ export class CloudAuthManager {
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
 
-        return JSON.parse(decrypted);
+        const parsed = JSON.parse(decrypted);
+        
+        // Convert ISO string back to Date object
+        if (parsed.createdAt && typeof parsed.createdAt === 'string') {
+            parsed.createdAt = new Date(parsed.createdAt);
+        }
+
+        return parsed;
     }
 
     /**
