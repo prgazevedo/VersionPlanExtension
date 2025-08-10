@@ -140,6 +140,18 @@
         "title": "Open Cloud Settings",
         "category": "Claude Config",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "claude-config.toggleContext7",
+        "title": "Toggle Context7 Auto-Append",
+        "category": "Claude Config",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "claude-config.installContext7Help",
+        "title": "Install Context7 MCP Help",
+        "category": "Claude Config",
+        "icon": "$(question)"
       }
     ],
     "viewsContainers": {
@@ -212,6 +224,11 @@
         "claude-config.conversationDataPath": {
           "type": "string",
           "description": "Custom path to Claude conversation data directory (leave empty for default ~/.claude/projects)"
+        },
+        "claude-config.autoUseContext7": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically append 'use context7' to coding prompts for real-time documentation"
         },
         "claude-config.usageTracking.showInStatusBar": {
           "type": "boolean",

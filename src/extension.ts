@@ -164,6 +164,148 @@ This ensures better code quality and maintains project knowledge continuity acro
     }
 }
 
+async function ensureContext7RuleInClaudeMd(workspacePath: string) {
+    try {
+        const claudemdPath = path.join(workspacePath, 'CLAUDE.md');
+        const context7Rule = `
+
+# Context7 Integration
+# Added by Claude Config Manager Extension
+
+When responding to coding requests, automatically append "use context7" to retrieve real-time, version-specific documentation.
+
+**Instructions for Claude Code:**
+- For any prompt involving code generation, debugging, or technical questions, automatically include context7
+- This ensures you have access to the most current API documentation and examples
+- Prevents outdated or hallucinated code responses
+
+**Activation**: This rule is active. All coding prompts will trigger context7 documentation retrieval.
+**Benefits**: Real-time documentation, accurate API references, up-to-date code examples.
+`;
+
+        // Check if the rule already exists
+        if (await fs.pathExists(claudemdPath)) {
+            const content = await fs.readFile(claudemdPath, 'utf8');
+            if (content.includes('# Context7 Integration')) {
+                // Silent - this is the expected case
+                return;
+            }
+        }
+
+        // Append the rule to CLAUDE.md
+        await fs.appendFile(claudemdPath, context7Rule);
+    } catch (error) {
+        console.error('Failed to add Context7 rule to CLAUDE.md:', error);
+        throw error;
+    }
+}
+
+async function removeContext7RuleFromClaudeMd(workspacePath: string) {
+    try {
+        const claudemdPath = path.join(workspacePath, 'CLAUDE.md');
+        
+        if (await fs.pathExists(claudemdPath)) {
+            const content = await fs.readFile(claudemdPath, 'utf8');
+            
+            // Remove Context7 section if it exists
+            const context7SectionStart = content.indexOf('# Context7 Integration');
+            if (context7SectionStart !== -1) {
+                // Find the next section or end of file
+                const nextSectionIndex = content.indexOf('\n#', context7SectionStart + 1);
+                const endIndex = nextSectionIndex !== -1 ? nextSectionIndex : content.length;
+                
+                const updatedContent = content.substring(0, context7SectionStart) + 
+                                     content.substring(endIndex);
+                
+                await fs.writeFile(claudemdPath, updatedContent);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to remove Context7 rule from CLAUDE.md:', error);
+        throw error;
+    }
+}
+
+async function checkContext7Installation(): Promise<boolean> {
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            return false;
+        }
+
+        // Check for .vscode/mcp.json with context7 configuration
+        const mcpConfigPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'mcp.json');
+        if (await fs.pathExists(mcpConfigPath)) {
+            try {
+                const mcpConfig = JSON.parse(await fs.readFile(mcpConfigPath, 'utf8'));
+                // Check if context7 MCP is configured
+                const hasContext7 = mcpConfig.mcpServers && 
+                                  Object.keys(mcpConfig.mcpServers).some(key => 
+                                      key.includes('context7') || 
+                                      (mcpConfig.mcpServers[key].command && 
+                                       mcpConfig.mcpServers[key].command.includes('context7'))
+                                  );
+                if (hasContext7) {
+                    return true;
+                }
+            } catch (parseError) {
+                // Invalid JSON, continue checking other methods
+            }
+        }
+
+        // Check user settings for context7 MCP configuration
+        const userConfig = vscode.workspace.getConfiguration('github.copilot.chat');
+        const mcpServers = userConfig.get('mcpServers');
+        if (mcpServers && typeof mcpServers === 'object') {
+            const hasContext7 = Object.keys(mcpServers).some(key => key.includes('context7'));
+            if (hasContext7) {
+                return true;
+            }
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Error checking Context7 installation:', error);
+        return false;
+    }
+}
+
+async function offerContext7Installation() {
+    const selection = await vscode.window.showInformationMessage(
+        'Context7 MCP server not detected. Would you like help installing it?',
+        'Install via NPM',
+        'Install via Smithery',
+        'Manual Setup Guide',
+        'Skip'
+    );
+
+    if (selection === 'Install via NPM') {
+        vscode.window.showInformationMessage(
+            'To install Context7 MCP:\n\n1. Run: npm install -g @upstash/context7-mcp\n2. Configure in .vscode/mcp.json or VS Code settings\n3. Restart VS Code',
+            'Open Terminal'
+        ).then(terminalSelection => {
+            if (terminalSelection === 'Open Terminal') {
+                const terminal = vscode.window.createTerminal('Context7 Installation');
+                terminal.show();
+                terminal.sendText('npm install -g @upstash/context7-mcp');
+            }
+        });
+    } else if (selection === 'Install via Smithery') {
+        vscode.window.showInformationMessage(
+            'To install Context7 MCP via Smithery:\n\n1. Run: npx -y @smithery/cli@latest install @upstash/context7-mcp\n2. Follow the setup prompts\n3. Restart VS Code',
+            'Open Terminal'
+        ).then(terminalSelection => {
+            if (terminalSelection === 'Open Terminal') {
+                const terminal = vscode.window.createTerminal('Context7 Installation');
+                terminal.show();
+                terminal.sendText('npx -y @smithery/cli@latest install @upstash/context7-mcp');
+            }
+        });
+    } else if (selection === 'Manual Setup Guide') {
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/upstash/context7'));
+    }
+}
+
 async function createProjectPlanTemplate() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
@@ -340,6 +482,39 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage('No workspace folder found');
             }
         }),
+        vscode.commands.registerCommand('claude-config.toggleContext7', async () => {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('No workspace folder found');
+                return;
+            }
+
+            const config = vscode.workspace.getConfiguration('claude-config');
+            const currentSetting = config.get<boolean>('autoUseContext7', false);
+            
+            try {
+                await config.update('autoUseContext7', !currentSetting, vscode.ConfigurationTarget.Workspace);
+                
+                if (!currentSetting) {
+                    // Enabling Context7
+                    const context7Installed = await checkContext7Installation();
+                    if (!context7Installed) {
+                        await offerContext7Installation();
+                    }
+                    await ensureContext7RuleInClaudeMd(workspaceFolder.uri.fsPath);
+                    vscode.window.showInformationMessage('Context7 auto-append enabled! Added rule to CLAUDE.md');
+                } else {
+                    // Disabling Context7
+                    await removeContext7RuleFromClaudeMd(workspaceFolder.uri.fsPath);
+                    vscode.window.showInformationMessage('Context7 auto-append disabled! Removed rule from CLAUDE.md');
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to toggle Context7: ${error}`);
+            }
+        }),
+        vscode.commands.registerCommand('claude-config.installContext7Help', () => {
+            offerContext7Installation();
+        }),
         vscode.commands.registerCommand('claude-config.viewUsageStats', () => viewUsageStatsCommand()),
         vscode.commands.registerCommand('claude-config.showUsageQuickPick', () => showUsageQuickPickCommand()),
         vscode.commands.registerCommand('claude-config.debugCcusage', () => debugCcusageCommand()),
@@ -420,6 +595,22 @@ export async function activate(context: vscode.ExtensionContext) {
             if (newPath) {
                 conversationManager.updateDataPath(newPath);
                 conversationTreeProvider.refresh();
+            }
+        }
+        
+        if (event.affectsConfiguration('claude-config.autoUseContext7')) {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (workspaceFolder) {
+                const autoUseContext7 = vscode.workspace.getConfiguration('claude-config').get<boolean>('autoUseContext7', false);
+                if (autoUseContext7) {
+                    ensureContext7RuleInClaudeMd(workspaceFolder.uri.fsPath).catch(err => {
+                        console.error('Failed to add Context7 rule:', err);
+                    });
+                } else {
+                    removeContext7RuleFromClaudeMd(workspaceFolder.uri.fsPath).catch(err => {
+                        console.error('Failed to remove Context7 rule:', err);
+                    });
+                }
             }
         }
     });
