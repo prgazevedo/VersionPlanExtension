@@ -468,8 +468,9 @@ When working on this project, always refer to and maintain the project plan loca
 **Plan Mode Integration:**
 
 - **When entering plan mode**: Read the current PROJECT_PLAN.md to understand existing context and priorities
-- **During plan mode**: Build upon and refine the existing project plan structure
-- **When exiting plan mode**: ALWAYS update PROJECT_PLAN.md with your new plan details, replacing or enhancing the relevant sections (Architecture, TODO, Development Workflow, etc.)
+- **During plan mode**: Include specific PROJECT_PLAN.md updates as part of your proposed plan
+- **In your exit plan**: MUST explicitly list which sections of PROJECT_PLAN.md to update with what content
+- **After plan approval**: Execute the PROJECT_PLAN.md updates along with other planned changes
 - **Plan persistence**: The PROJECT_PLAN.md serves as the permanent repository for all planning work - plan mode should treat it as the single source of truth
 
 This ensures better code quality and maintains project knowledge continuity across different Claude Code sessions and plan mode iterations.

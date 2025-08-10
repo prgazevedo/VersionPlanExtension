@@ -288,7 +288,245 @@ ccusage CLI → CcusageService → CloudTokenTracker → WebDAV Provider → Clo
 - **Phase 3**: 📋 Planned - Enhanced cloud sync operations  
 - **Phase 4**: 📋 Planned - Advanced multi-device features
 
-### Future Enhancements (Low Priority)
+## v3.4.0 Features - Prompt Enhancement Suite (Next Release)
+
+### Context7 Auto-Append Integration
+- **Status**: 📋 Planned
+- **Description**: Automatic "use context7" injection via CLAUDE.md for real-time documentation
+- **Implementation**: 
+  - Add `claude-config.autoUseContext7` setting to package.json
+  - Create `ensureContext7RuleInClaudeMd()` function similar to PROJECT_PLAN integration
+  - Detect `.vscode/mcp.json` for context7 installation
+  - Offer installation guidance if missing
+- **User Experience**: Toggle in settings, automatic rule injection, installation helper
+
+### Context Building Support System
+- **Status**: 📋 Planned
+- **Description**: Support for "Prepare to Discuss" methodology with hybrid detection
+- **Architecture**:
+  - **ContextBuildingMonitor**: Hybrid detection with confidence scoring
+    - 85%+ confidence: Auto-complete
+    - 60-84% confidence: User confirmation
+    - <60% confidence: Progress tracking
+  - **ContextQualityMetrics**: Multi-signal analysis (tokens, structure, time, depth)
+  - **PromptTemplateManager**: Pre-built templates for common scenarios
+- **Detection Signals**:
+  - Token usage (input/output counts)
+  - Response structure (headers, code blocks)
+  - Time investment (response duration)
+  - Depth indicators (keywords, file references)
+- **User Flow**: Template selection → Monitoring → Hybrid detection → Status update
+
+### Improved Plan Mode Instructions
+- **Status**: 📋 Planned
+- **Description**: Clearer PROJECT_PLAN.md integration instructions
+- **Changes to CLAUDE.md**:
+  - "During plan mode": Include PROJECT_PLAN.md updates in proposed plan
+  - "In your exit plan": MUST list sections to update
+  - "After approval": Execute updates alongside code changes
+
+## v4.0 Features - Claude Team Orchestrator (Major Release)
+
+### Overview
+Transform extension from configuration manager to full AI team orchestrator with specialized Claude instances working in parallel on different aspects of the project.
+
+### Core Architecture: Hierarchical Context System
+
+#### Directory Structure
+```
+project-root/
+├── CLAUDE.md                         # 🏢 Company Handbook (shared standards)
+├── PROJECT_PLAN.md                   # 📊 Team Dashboard (dynamic status)
+├── .claude/
+│   ├── .plans/                       # Planning documents
+│   ├── .chats/                       # Exported conversations  
+│   ├── .shared-artifacts/            # 📮 Team Mailbox (handoffs)
+│   │   ├── auth-plan.md
+│   │   ├── api-contracts.yaml
+│   │   └── critique-log.md
+│   ├── team-config.json              # Team member definitions
+│   └── team/                         # Role-specific configurations
+│       ├── planner/
+│       │   └── CLAUDE.md             # Planner role instructions
+│       ├── critic/
+│       │   └── CLAUDE.md             # Critic role instructions
+│       ├── auth-dev/
+│       │   └── CLAUDE.md             # Auth Dev specialization
+│       └── ui-dev/
+│           └── CLAUDE.md             # UI Dev specialization
+├── main/                             # Worktree: Planner/Critic code
+├── auth-feature/                     # Worktree: Auth Dev code
+└── ui-feature/                       # Worktree: UI Dev code
+```
+
+### Claude Team Features
+
+#### Hierarchical CLAUDE.md Inheritance
+- **Root CLAUDE.md**: "Company Handbook" - shared standards, conventions, architecture
+- **Role CLAUDE.md** (in `.claude/team/[role]/`): "Job Description" - specialized instructions
+- **PROJECT_PLAN.md**: "Status Dashboard" - real-time team coordination
+- **Context Inheritance**: Each role reads: Root → Role-specific → PROJECT_PLAN → Artifacts
+
+#### Team Member Roles
+1. **🎯 Planner**: System architect, high-level design, creates plans
+2. **🔍 Critic**: Code reviewer, security auditor, validates implementations
+3. **🔐 Auth Dev**: Authentication specialist, security-focused development
+4. **🎨 UI Dev**: Frontend expert, user experience, component design
+5. **⚙️ API Dev**: Backend specialist, database, microservices
+
+#### Enhanced UI Design
+```
+┌─ CLAUDE TEAM ORCHESTRATOR ─────────────────────┐
+│ 📊 Team Status                                 │
+│ ├─ 🎯 Planner (main)           [🧠 Thinking]  │
+│ │  ├─ Context: ✅ Built (50K tokens, 7m)      │
+│ │  └─ "Designing microservice boundaries..."   │
+│ ├─ 🔍 Critic (main)            [✅ Complete]  │
+│ │  ├─ Context: ♻️ Inherited from Planner      │
+│ │  └─ "Found 3 security issues in auth"       │
+│ ├─ 🔐 Auth Dev (auth-feature)  [⚡ Active]   │
+│ │  ├─ Context: 🔄 Building (12K tokens, 2m)   │
+│ │  └─ "Implementing JWT refresh rotation"     │
+│ └─ 🎨 UI Dev (ui-feature)      [⏸️ Waiting]  │
+│    ├─ Context: 📥 Ready to inherit            │
+│    └─ "Blocked: Waiting for auth endpoints"   │
+├─────────────────────────────────────────────────┤
+│ 📁 Shared Artifacts (Team Mailbox)             │
+│ ├─ 📋 auth-plan.md (Planner → All) [2m ago]   │
+│ ├─ 🔴 critique-v1.md (Critic → Auth) [5m ago] │
+│ └─ 📄 api-spec.yaml (Auth → UI) [pending]     │
+├─────────────────────────────────────────────────┤
+│ 🧬 Context Inheritance Map                     │
+│ Planner: Built 50K tokens ─┬→ Critic (30K)    │
+│                            └→ Auth Dev (20K)   │
+└─────────────────────────────────────────────────┘
+```
+
+#### Smart Context Distribution
+```typescript
+interface ContextDistribution {
+  planner: {
+    reads: ['full-codebase', 'all-docs', 'all-plans'],
+    writes: ['.claude/.shared-artifacts/plans/', 'PROJECT_PLAN.md'],
+    focus: 'architecture, design patterns, system boundaries'
+  },
+  critic: {
+    reads: ['implementations', 'tests', 'security-docs'],
+    writes: ['.claude/.shared-artifacts/reviews/'],
+    focus: 'code quality, security, performance, best practices'
+  },
+  authDev: {
+    reads: ['auth/', 'middleware/', 'auth-plan.md'],
+    writes: ['auth-feature/', '.claude/.shared-artifacts/api-specs/'],
+    focus: 'OAuth2, JWT, session management, OWASP guidelines'
+  },
+  uiDev: {
+    reads: ['components/', 'pages/', 'api-specs/'],
+    writes: ['ui-feature/', '.claude/.shared-artifacts/ui-contracts/'],
+    focus: 'React patterns, accessibility, responsive design'
+  }
+}
+```
+
+### Implementation Phases
+
+#### Phase 1: Foundation (v3.4.0) - 2 weeks
+- ✅ Context7 integration via CLAUDE.md
+- ✅ Context Building support with hybrid detection
+- ✅ Improved plan mode instructions
+- ✅ Basic prompt templates
+
+#### Phase 2: Team Infrastructure (v4.0.0) - 3 weeks
+- Git worktree management commands
+- `.claude/team/` structure with role configs
+- `.claude/.shared-artifacts/` system
+- Basic team UI in sidebar
+- Role assignment commands
+
+#### Phase 3: Intelligence Layer (v4.1.0) - 3 weeks
+- Context inheritance system
+- Automatic handoff detection
+- Smart context distribution
+- Living PROJECT_PLAN.md dashboard
+- Team metrics tracking
+
+#### Phase 4: Advanced Orchestration (v4.2.0) - 4 weeks
+- AI-suggested role assignment
+- Automatic conflict resolution
+- Performance analytics dashboard
+- Workflow optimization suggestions
+- Team collaboration patterns
+
+## Technical Architecture Updates
+
+### v3.4.0 New Components
+- `src/services/Context7Manager.ts` - Context7 MCP integration
+- `src/services/ContextBuildingMonitor.ts` - Hybrid detection system
+- `src/services/ContextQualityMetrics.ts` - Scoring system
+- `src/services/PromptTemplateManager.ts` - Template management
+
+### v4.0.0 Team Components
+- `src/team/ClaudeTeamOrchestrator.ts` - Main orchestrator
+- `src/team/ContextInheritance.ts` - Context layering system
+- `src/team/TeamHandoffManager.ts` - Handoff detection
+- `src/team/GitWorktreeManager.ts` - Worktree operations
+- `src/team/SharedArtifactsManager.ts` - Team communication
+
+## Configuration Schema Updates
+
+### v3.4.0 Settings
+```json
+{
+  "claude-config.autoUseContext7": false,
+  "claude-config.contextBuilding.enabled": true,
+  "claude-config.contextBuilding.autoDetection": true,
+  "claude-config.contextBuilding.confidenceThreshold": 85,
+  "claude-config.contextBuilding.showProgress": true,
+  "claude-config.contextBuilding.templates": [
+    "frontend-architecture",
+    "api-layer",
+    "database-schema",
+    "component-patterns"
+  ]
+}
+```
+
+### v4.0.0 Team Settings
+```json
+{
+  "claude-config.team.enabled": false,
+  "claude-config.team.roles": [
+    "planner",
+    "critic", 
+    "auth-dev",
+    "ui-dev",
+    "api-dev"
+  ],
+  "claude-config.team.autoHandoff": true,
+  "claude-config.team.contextInheritance": true,
+  "claude-config.team.sharedArtifactsPath": ".claude/.shared-artifacts/",
+  "claude-config.team.roleConfigPath": ".claude/team/",
+  "claude-config.team.dashboardUpdateInterval": 5000,
+  "claude-config.team.worktreeAutoCreate": true
+}
+```
+
+## Success Metrics
+
+### v3.4.0 Success Criteria
+- Context7 detection accuracy: >95%
+- Context building detection accuracy: >80%
+- User satisfaction with prompt templates: >4/5
+- Plan mode instruction clarity improvement: measurable
+
+### v4.0.0 Success Criteria
+- Team initialization: <30 seconds
+- Context inheritance token savings: >40%
+- Handoff detection accuracy: >90%
+- Dashboard real-time updates: <5 second delay
+- Parallel development efficiency: 2-3x improvement
+
+### Future Enhancements (Post v4.0)
 - [ ] Conversation search across projects
 - [ ] Batch export functionality
 - [ ] Keyboard shortcuts for actions
@@ -312,7 +550,7 @@ ccusage CLI → CcusageService → CloudTokenTracker → WebDAV Provider → Clo
 
 ---
 
-**Version**: 3.3.0  
-**Status**: Ready for VSCode Marketplace Publication  
-**Last Updated**: August 2025 - Release v3.3.0 with WebDAV Cloud Sync Implementation & Architecture Simplification  
-**Next Review**: Post-marketplace publication feedback and WebDAV server compatibility testing
+**Version**: 3.4.0 (Planned)  
+**Status**: Major Feature Planning Phase  
+**Last Updated**: August 2025 - Comprehensive v3.4.0 and v4.0.0 roadmap planning with Context7, Context Building, and Claude Team Orchestrator  
+**Next Review**: Start v3.4.0 implementation phase
