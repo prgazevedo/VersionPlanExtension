@@ -10,8 +10,11 @@ A comprehensive VSCode extension for Claude Code workflows, featuring CLAUDE.md 
 - Automatic model detection (Opus, Sonnet, Haiku)
 - Smart package manager fallback (bunx → npx → npm exec)
 
-### ☁️ Conversation Sync (WebDAV)
+### ☁️ Conversation Sync (WebDAV) - v3.4.0 Enhanced!
 - Sync conversations to your own Nextcloud, ownCloud, or WebDAV server
+- **Smart sync with hash-based change detection** (prevents unnecessary uploads)
+- **Resume capability** for interrupted sync sessions
+- **Optimized batch operations** for reduced server load
 - Optional AES-256-GCM encryption for sensitive data
 - Cross-device usage statistics aggregation
 - Full control over your data location

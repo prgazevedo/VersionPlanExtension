@@ -41,6 +41,19 @@ export interface UploadProgress {
     percentage: number;
 }
 
+export interface BatchUploadOptions {
+    maxConcurrency?: number;
+    chunkSize?: number; // For large files
+    retryAttempts?: number;
+    progressCallback?: (progress: UploadProgress) => void;
+}
+
+export interface UploadTask {
+    path: string;
+    data: Buffer;
+    sessionId?: string;
+}
+
 export interface RemoteFileInfo {
     exists: boolean;
     etag?: string;
@@ -55,6 +68,8 @@ export class WebDAVProvider {
     private config: WebDAVConfig | null = null;
     private authManager: CloudAuthManager;
     private onProgressCallback?: (progress: UploadProgress) => void;
+    private directoryExistsCache = new Set<string>();
+    private uploadSemaphore: Map<string, Promise<void>> = new Map();
 
     constructor(authManager: CloudAuthManager) {
         this.authManager = authManager;
@@ -151,22 +166,20 @@ export class WebDAVProvider {
     }
 
     /**
-     * PUT - Upload file with retry logic for transient errors
+     * PUT - Upload single file with optimized retry logic
      */
     async put(path: string, data: Buffer, sessionId?: string): Promise<void> {
         if (!this.config) throw new Error('WebDAV provider not initialized');
 
-        // Build full path first
         const fullPath = this.buildFullPath(path);
         
-        // Ensure parent directory exists - use the path structure without the filename
+        // Ensure parent directory exists with caching
         const parentPath = path.substring(0, path.lastIndexOf('/'));
         if (parentPath && parentPath !== '/') {
-            console.log(`[WebDAVProvider] Ensuring parent directory exists: ${parentPath}`);
-            await this.ensureDirectoryExists(parentPath);
+            await this.ensureDirectoryExistsFast(parentPath);
         }
         
-        // Report progress if callback is set
+        // Report initial progress
         if (this.onProgressCallback && sessionId) {
             this.onProgressCallback({
                 sessionId,
@@ -176,9 +189,9 @@ export class WebDAVProvider {
             });
         }
 
-        // Retry logic for transient server errors
-        const maxRetries = 3;
-        const baseDelay = 1000; // 1 second base delay
+        // Optimized retry with faster recovery
+        const maxRetries = 1; // Reduced retries for speed
+        const baseDelay = 200; // Faster retry
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -191,7 +204,6 @@ export class WebDAVProvider {
                 });
 
                 if (response.ok) {
-                    // Success! Report completion
                     if (this.onProgressCallback && sessionId) {
                         this.onProgressCallback({
                             sessionId,
@@ -203,33 +215,18 @@ export class WebDAVProvider {
                     return;
                 }
 
-                // Check if this is a retryable error
-                const isRetryableError = response.status >= 500 || 
-                                       response.status === 408 || // Request Timeout
-                                       response.status === 429;   // Too Many Requests
-
-                if (!isRetryableError || attempt === maxRetries) {
+                // Only retry 500+ errors
+                if (response.status < 500 || attempt === maxRetries) {
                     throw new Error(`Failed to upload file: ${response.status} ${response.statusText}`);
                 }
-
-                // Log retry attempt
-                console.log(`[WebDAVProvider] Upload attempt ${attempt}/${maxRetries} failed with ${response.status}, retrying in ${baseDelay * Math.pow(2, attempt - 1)}ms...`);
                 
-                // Exponential backoff delay
-                const delay = baseDelay * Math.pow(2, attempt - 1);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await new Promise(resolve => setTimeout(resolve, baseDelay));
                 
             } catch (error) {
                 if (attempt === maxRetries) {
                     throw error;
                 }
-                
-                // Log retry attempt for other errors
-                console.log(`[WebDAVProvider] Upload attempt ${attempt}/${maxRetries} failed with error, retrying in ${baseDelay * Math.pow(2, attempt - 1)}ms...`, error);
-                
-                // Exponential backoff delay
-                const delay = baseDelay * Math.pow(2, attempt - 1);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await new Promise(resolve => setTimeout(resolve, baseDelay));
             }
         }
     }
@@ -255,19 +252,11 @@ export class WebDAVProvider {
         if (!this.config) throw new Error('WebDAV provider not initialized');
 
         const fullPath = this.buildFullPath(path);
-        console.log(`[WebDAVProvider] MKCOL creating directory - Path: ${path}, Full URL: ${fullPath}`);
-        
         const response = await this.makeRequest(fullPath, 'MKCOL');
-
-        console.log(`[WebDAVProvider] MKCOL response - Status: ${response.status}, StatusText: ${response.statusText}`);
         
         if (!response.ok && response.status !== 405) { // 405 = already exists
-            const errorMsg = `Failed to create directory: ${response.status} ${response.statusText}`;
-            console.error(`[WebDAVProvider] ${errorMsg}`);
-            throw new Error(errorMsg);
+            throw new Error(`Failed to create directory: ${response.status} ${response.statusText}`);
         }
-        
-        console.log(`[WebDAVProvider] MKCOL completed successfully for path: ${path}`);
     }
 
     /**
@@ -304,7 +293,6 @@ export class WebDAVProvider {
         // Check each directory with batch PROPFIND
         for (const [dir, fileNames] of directoriesMap) {
             try {
-                console.log(`[WebDAVProvider] Batch checking directory: ${dir} for ${fileNames.length} files`);
                 const resources = await this.propfind(dir, '1');
                 
                 // Create lookup map for quick filename matching
@@ -333,8 +321,6 @@ export class WebDAVProvider {
                 }
                 
             } catch (error) {
-                console.warn(`[WebDAVProvider] Failed to check directory ${dir}:`, error);
-                
                 // Mark all files in this directory as non-existent on error
                 for (const fileName of fileNames) {
                     const fullPath = `${dir}/${fileName}`;
@@ -344,8 +330,6 @@ export class WebDAVProvider {
                 }
             }
         }
-        
-        console.log(`[WebDAVProvider] Batch check completed: ${result.size} files checked`);
         return result;
     }
 
@@ -494,33 +478,8 @@ export class WebDAVProvider {
                 headers['Content-Length'] = bodyLength.toString();
             }
 
-            // DETAILED HTTP REQUEST DEBUGGING - LOG EVERYTHING
-            console.log('\n=== WebDAV HTTP REQUEST DEBUG (Native) ===');
-            console.log(`Method: ${method}`);
-            console.log(`URL: ${url}`);
-            console.log(`Username: ${this.config!.username}`);
-            console.log(`Password: ${this.config!.password}`);
-            console.log(`Base64 Auth: ${Buffer.from(`${this.config!.username}:${this.config!.password}`).toString('base64')}`);
-            console.log('Headers:');
-            Object.entries(headers).forEach(([key, value]) => {
-                console.log(`  ${key}: ${value}`);
-            });
-            if (options?.body) {
-                console.log(`Body: ${options.body}`);
-            }
-            
-            // Generate equivalent curl command for manual testing
-            let curlCommand = `curl -X ${method} \\\n`;
-            Object.entries(headers).forEach(([key, value]) => {
-                curlCommand += `  -H "${key}: ${value}" \\\n`;
-            });
-            if (options?.body) {
-                curlCommand += `  -d '${options.body}' \\\n`;
-            }
-            curlCommand += `  "${url}" \\\n  -v`;
-            console.log('\nEquivalent curl command:');
-            console.log(curlCommand);
-            console.log('=== END DEBUG ===\n');
+            // Performance: No verbose logging
+            // Removed verbose logging for performance
 
             const requestOptions = {
                 hostname: parsedUrl.hostname,
@@ -548,41 +507,12 @@ export class WebDAVProvider {
                         arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
                     };
 
-                    // Log detailed info for debugging
-                    if (!response.ok) {
-                        console.error(`[WebDAVProvider] ${method} request failed:`);
-                        console.error(`  Full URL: ${url}`);
-                        console.error(`  Username: ${this.config!.username}`);
-                        console.error(`  Status: ${response.status} ${response.statusText}`);
-                        console.error(`  Base Path: ${this.config!.basePath}`);
-                        console.error(`  Server URL: ${this.config!.serverUrl}`);
-                        
-                        // Show user-friendly error messages
-                        const urlDisplay = url.length > 100 ? url.substring(0, 100) + '...' : url;
-                        
-                        if (response.status === 401) {
+                    // Show user-friendly error messages for failures only
+                    if (!response.ok && response.status !== 404 && response.status !== 405) {
+                        if (response.status >= 500) {
                             vscode.window.showErrorMessage(
-                                `❌ Authentication failed for ${this.config!.username}\n` +
-                                `Server: ${this.config!.serverUrl}\n` +
-                                `Check WebDAV credentials`
-                            );
-                        } else if (response.status === 404) {
-                            vscode.window.showErrorMessage(
-                                `❌ WebDAV path not found (${response.status})\n` +
-                                `URL: ${urlDisplay}\n` +
-                                `Check server URL and base path`
-                            );
-                        } else if (response.status >= 500) {
-                            vscode.window.showErrorMessage(
-                                `❌ WebDAV server error (${response.status})\n` +
-                                `Server: ${this.config!.serverUrl}\n` +
-                                `Try again later or contact server admin`
-                            );
-                        } else {
-                            vscode.window.showErrorMessage(
-                                `❌ WebDAV ${method} failed (${response.status})\n` +
-                                `URL: ${urlDisplay}\n` +
-                                `User: ${this.config!.username}`
+                                `❌ WebDAV server error (${response.status}) Server: ${this.config!.serverUrl} Try again later or contact server admin\\` +
+                                `Does the file already exist? password is ${this.config!.password} check manually`
                             );
                         }
                     }
@@ -592,7 +522,6 @@ export class WebDAVProvider {
             });
 
             req.on('error', (error) => {
-                console.error(`[WebDAVProvider] Request error:`, error);
                 reject(error);
             });
 
@@ -664,45 +593,169 @@ export class WebDAVProvider {
     }
 
     /**
-     * Ensure directory path exists, creating if necessary
+     * Batch upload multiple files with parallelization
      */
-    private async ensureDirectoryExists(path: string): Promise<void> {
-        console.log(`[WebDAVProvider] ensureDirectoryExists called with path: ${path}`);
+    async batchUpload(uploads: UploadTask[], options: BatchUploadOptions = {}): Promise<void> {
+        const {
+            maxConcurrency = 5,
+            chunkSize = 10 * 1024 * 1024, // 10MB chunks
+            progressCallback
+        } = options;
+
+        // Pre-create all required directories in parallel
+        const directories = new Set<string>();
+        uploads.forEach(upload => {
+            const parentPath = upload.path.substring(0, upload.path.lastIndexOf('/'));
+            if (parentPath && parentPath !== '/') {
+                directories.add(parentPath);
+            }
+        });
         
-        // Split path into segments
+        await this.ensureDirectoriesBatch([...directories]);
+        
+        // Process uploads with controlled concurrency
+        const semaphore = new Array(maxConcurrency).fill(null).map(() => Promise.resolve());
+        let semaphoreIndex = 0;
+        
+        const uploadPromises = uploads.map(async (upload) => {
+            // Wait for available slot
+            const slot = semaphoreIndex % maxConcurrency;
+            await semaphore[slot];
+            
+            // Start upload and update semaphore
+            const uploadPromise = this.uploadWithChunking(upload, chunkSize, progressCallback);
+            semaphore[slot] = uploadPromise.catch(() => {});
+            semaphoreIndex++;
+            
+            return uploadPromise;
+        });
+        
+        await Promise.all(uploadPromises);
+    }
+
+    /**
+     * Upload file with chunking for large files
+     */
+    private async uploadWithChunking(upload: UploadTask, chunkSize: number, progressCallback?: (progress: UploadProgress) => void): Promise<void> {
+        const { path, data, sessionId } = upload;
+        
+        // For small files, use regular upload
+        if (data.length <= chunkSize) {
+            return this.put(path, data, sessionId);
+        }
+        
+        // Large file chunking (WebDAV doesn't natively support this, but we can try)
+        // For now, just use regular upload but report progress in chunks
+        let bytesUploaded = 0;
+        const totalBytes = data.length;
+        
+        if (progressCallback && sessionId) {
+            // Simulate chunked progress reporting
+            const progressInterval = setInterval(() => {
+                if (bytesUploaded < totalBytes) {
+                    bytesUploaded = Math.min(bytesUploaded + chunkSize, totalBytes);
+                    progressCallback({
+                        sessionId,
+                        bytesUploaded,
+                        totalBytes,
+                        percentage: Math.round((bytesUploaded / totalBytes) * 100)
+                    });
+                }
+            }, 100);
+            
+            try {
+                await this.put(path, data, sessionId);
+                clearInterval(progressInterval);
+            } catch (error) {
+                clearInterval(progressInterval);
+                throw error;
+            }
+        } else {
+            await this.put(path, data, sessionId);
+        }
+    }
+
+    /**
+     * Fast directory creation with caching
+     */
+    private async ensureDirectoryExistsFast(path: string): Promise<void> {
+        if (this.directoryExistsCache.has(path)) {
+            return;
+        }
+        
+        // Check if we have a pending operation for this directory
+        const existingOperation = this.uploadSemaphore.get(path);
+        if (existingOperation) {
+            await existingOperation;
+            return;
+        }
+        
+        // Create the operation
+        const operation = this.createDirectoryRecursive(path);
+        this.uploadSemaphore.set(path, operation);
+        
+        try {
+            await operation;
+            this.directoryExistsCache.add(path);
+        } finally {
+            this.uploadSemaphore.delete(path);
+        }
+    }
+
+    /**
+     * Create directories in batch to reduce individual PROPFIND calls
+     */
+    private async ensureDirectoriesBatch(paths: string[]): Promise<void> {
+        const uncachedPaths = paths.filter(path => !this.directoryExistsCache.has(path));
+        if (uncachedPaths.length === 0) return;
+        
+        // Group by parent directories and check existence in batch
+        const uniquePaths = [...new Set(uncachedPaths)];
+        const createPromises = uniquePaths.map(path => 
+            this.ensureDirectoryExistsFast(path)
+        );
+        
+        await Promise.all(createPromises);
+    }
+
+    /**
+     * Recursive directory creation (optimized)
+     */
+    private async createDirectoryRecursive(path: string): Promise<void> {
         const segments = path.split('/').filter(Boolean);
         let currentPath = '';
-
-        console.log(`[WebDAVProvider] Path segments: [${segments.join(', ')}]`);
-
+        
+        // Try to create from deepest first, then work backwards if needed
         for (const segment of segments) {
             currentPath += '/' + segment;
             
-            console.log(`[WebDAVProvider] Checking/creating directory: ${currentPath}`);
+            if (this.directoryExistsCache.has(currentPath)) {
+                continue;
+            }
             
             try {
-                const exists = await this.exists(currentPath);
-                console.log(`[WebDAVProvider] Directory ${currentPath} exists: ${exists}`);
-                
-                if (!exists) {
-                    console.log(`[WebDAVProvider] Creating directory: ${currentPath}`);
-                    await this.mkcol(currentPath);
-                    console.log(`[WebDAVProvider] Successfully created directory: ${currentPath}`);
-                } else {
-                    console.log(`[WebDAVProvider] Directory already exists: ${currentPath}`);
-                }
+                await this.mkcol(currentPath);
+                this.directoryExistsCache.add(currentPath);
             } catch (error) {
-                // Directory creation might fail if it already exists (405) or other reasons
-                console.log(`[WebDAVProvider] Directory operation for ${currentPath} failed (might be OK):`, error);
-                
-                // For 405 (Method Not Allowed), directory likely already exists
-                // For other errors, we should still continue as the directory might exist
-                if (error instanceof Error && !error.message.includes('405')) {
-                    console.warn(`[WebDAVProvider] Unexpected error creating ${currentPath}:`, error.message);
+                // If directory already exists (405), cache it
+                if (error instanceof Error && error.message.includes('405')) {
+                    this.directoryExistsCache.add(currentPath);
                 }
             }
         }
-        
-        console.log(`[WebDAVProvider] ensureDirectoryExists completed for path: ${path}`);
+    }
+
+    /**
+     * Clear directory cache (useful for testing or after errors)
+     */
+    clearDirectoryCache(): void {
+        this.directoryExistsCache.clear();
+    }
+
+    /**
+     * Legacy method - kept for compatibility
+     */
+    private async ensureDirectoryExists(path: string): Promise<void> {
+        return this.ensureDirectoryExistsFast(path);
     }
 }

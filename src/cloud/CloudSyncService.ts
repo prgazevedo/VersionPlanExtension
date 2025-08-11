@@ -8,7 +8,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { ConversationManager } from '../conversation/ConversationManager';
 import { ConversationSummary } from '../conversation/types';
-import { WebDAVProvider } from './providers/WebDAVProvider';
+import { WebDAVProvider, UploadTask, BatchUploadOptions } from './providers/WebDAVProvider';
 import { CloudDataProcessor, CloudSummaryFile, CloudSyncMetadata, ProcessingOptions } from './CloudDataProcessor';
 import { CloudAuthManager } from './CloudAuthManager';
 import { loggers } from '../utils/Logger';
@@ -271,64 +271,19 @@ export class CloudSyncService {
             return results;
         }
 
-        vscode.window.showInformationMessage(`📤 Starting upload of ${totalFiles} conversations...`);
-        this.reportProgress('uploading', 'Starting upload...', processedFiles, totalFiles);
+        vscode.window.showInformationMessage(`🚀 Starting optimized batch upload of ${totalFiles} conversations...`);
+        this.reportProgress('uploading', 'Starting batch upload...', processedFiles, totalFiles);
 
         const processingOptions = this.dataProcessor.getProcessingOptions();
         const encryptionPassword = processingOptions.encrypt 
             ? await this.dataProcessor.getEncryptionPassword()
             : undefined;
 
-        for (const conversation of conversationsToSync) {
-            try {
-                const result = await this.uploadConversation(
-                    conversation, 
-                    options, 
-                    processingOptions, 
-                    encryptionPassword
-                );
-                results.push(result);
-                
-                processedFiles++;
-                
-                // Show progress every 10 conversations or for important milestones
-                if (processedFiles % 10 === 0 || processedFiles === totalFiles || processedFiles === 1) {
-                    vscode.window.showInformationMessage(`📤 Uploaded ${processedFiles}/${totalFiles} conversations...`);
-                }
-                
-                this.reportProgress('uploading', conversation.sessionId, processedFiles, totalFiles);
-                
-            } catch (error: any) {
-                const errorMsg = error.message || 'Upload failed';
-                console.error(`Failed to upload conversation ${conversation.sessionId}:`, error);
-                
-                // Get WebDAV configuration for detailed error reporting
-                const credentials = await this.authManager.getCredentials('webdav');
-                const serverInfo = credentials ? 
-                    `Server: ${credentials.credentials.serverUrl}, User: ${credentials.credentials.username}` : 
-                    'Server info unavailable';
-                
-                // Show detailed error message to user with server details
-                if (error.message?.includes('401')) {
-                    vscode.window.showErrorMessage(`❌ Authentication failed for conversation ${conversation.sessionId}\n${serverInfo}\nCheck WebDAV credentials`);
-                } else if (error.message?.includes('403')) {
-                    vscode.window.showErrorMessage(`❌ Access denied for conversation ${conversation.sessionId}\n${serverInfo}\nCheck WebDAV permissions`);
-                } else if (error.message?.includes('404')) {
-                    vscode.window.showErrorMessage(`❌ WebDAV path not found for conversation ${conversation.sessionId}\n${serverInfo}\nCheck server configuration`);
-                } else {
-                    vscode.window.showErrorMessage(`❌ Upload failed for conversation ${conversation.sessionId}\n${serverInfo}\nError: ${errorMsg}`);
-                }
-                
-                results.push({
-                    success: false,
-                    operation: 'upload',
-                    sessionId: conversation.sessionId,
-                    projectName: conversation.projectName,
-                    error: errorMsg
-                });
-                processedFiles++;
-            }
-        }
+        // Use batch upload for much faster performance
+        await this.batchUploadConversations(conversationsToSync, options, processingOptions, encryptionPassword, results);
+        
+        // Update processed files count
+        processedFiles = conversationsToSync.length;
 
         return results;
     }
@@ -398,7 +353,172 @@ export class CloudSyncService {
     }
 
     /**
-     * Upload a single conversation (needsSync check should be done before calling this)
+     * Batch upload conversations with parallel processing for speed
+     */
+    private async batchUploadConversations(
+        conversations: ConversationSummary[],
+        options: SyncOptions,
+        processingOptions: ProcessingOptions,
+        encryptionPassword: string | undefined,
+        results: SyncResult[]
+    ): Promise<void> {
+        const totalFiles = conversations.length;
+        let processedFiles = 0;
+        
+        // Prepare all upload tasks
+        const uploadTasks: UploadTask[] = [];
+        const conversationMetadata: Map<string, { conversation: ConversationSummary, cloudSummary: any }> = new Map();
+        
+        for (const conversation of conversations) {
+            try {
+                // Create cloud summary
+                const cloudSummary = await this.dataProcessor.createCloudSummary(
+                    conversation.filePath,
+                    { ...processingOptions, encryptionPassword }
+                );
+                
+                conversationMetadata.set(conversation.sessionId, { conversation, cloudSummary });
+                
+                // Prepare summary upload
+                const summaryData = Buffer.from(JSON.stringify(cloudSummary, null, 2));
+                const processedSummaryData = await this.dataProcessor.processForUpload(summaryData, {
+                    compress: processingOptions.compress,
+                    encrypt: processingOptions.encrypt,
+                    encryptionPassword
+                });
+                
+                const fullCloudPath = this.webdavProvider.buildUseCasePath(cloudSummary.cloudSync.cloudPath);
+                
+                uploadTasks.push({
+                    path: fullCloudPath,
+                    data: processedSummaryData,
+                    sessionId: conversation.sessionId
+                });
+                
+                // Prepare full conversation upload if required
+                if (options.mode === 'full-conversations' || 
+                   (options.mode === 'smart-sync' && this.shouldIncludeFullConversation(conversation))) {
+                    
+                    const conversationData = await fs.readFile(conversation.filePath);
+                    const processedConversationData = await this.dataProcessor.processForUpload(conversationData, {
+                        compress: processingOptions.compress,
+                        encrypt: processingOptions.encrypt,
+                        encryptionPassword
+                    });
+                    
+                    const conversationCloudPath = cloudSummary.cloudSync.cloudPath
+                        .replace('summaries/', 'conversations/')
+                        .replace('.summary.json', '.jsonl');
+                    
+                    const fullConversationPath = this.webdavProvider.buildUseCasePath(conversationCloudPath);
+                    
+                    uploadTasks.push({
+                        path: fullConversationPath,
+                        data: processedConversationData,
+                        sessionId: `${conversation.sessionId}-conversation`
+                    });
+                }
+                
+            } catch (error: any) {
+                loggers.cloudSync.error(`Failed to prepare upload for ${conversation.sessionId}:`, error);
+                results.push({
+                    success: false,
+                    operation: 'upload',
+                    sessionId: conversation.sessionId,
+                    projectName: conversation.projectName,
+                    error: `Preparation failed: ${error.message}`
+                });
+            }
+        }
+        
+        if (uploadTasks.length === 0) {
+            return;
+        }
+        
+        // Configure batch upload with optimized settings for speed
+        const batchOptions: BatchUploadOptions = {
+            maxConcurrency: 10, // Increased for speed
+            chunkSize: 5 * 1024 * 1024, // 5MB chunks
+            retryAttempts: 1, // Fast retry
+            progressCallback: (progress) => {
+                if (this.onProgressCallback) {
+                    this.onProgressCallback({
+                        phase: 'uploading',
+                        currentFile: progress.sessionId,
+                        filesProcessed: Math.floor((progress.percentage / 100) * totalFiles),
+                        totalFiles,
+                        bytesTransferred: progress.bytesUploaded,
+                        totalBytes: progress.totalBytes,
+                        percentage: progress.percentage,
+                        errors: []
+                    });
+                }
+            }
+        };
+        
+        try {
+            vscode.window.showInformationMessage(`🚀 Starting batch upload of ${uploadTasks.length} files with ${batchOptions.maxConcurrency} parallel connections...`);
+            
+            // Perform batch upload
+            await this.webdavProvider.batchUpload(uploadTasks, batchOptions);
+            
+            // Update local summary files and results
+            for (const [sessionId, { conversation, cloudSummary }] of conversationMetadata) {
+                try {
+                    await this.updateLocalSummary(conversation, cloudSummary.cloudSync);
+                    results.push({
+                        success: true,
+                        operation: 'upload',
+                        sessionId: conversation.sessionId,
+                        projectName: conversation.projectName
+                    });
+                    processedFiles++;
+                    
+                    // Progress updates
+                    if (processedFiles % 10 === 0 || processedFiles === totalFiles || processedFiles === 1) {
+                        vscode.window.showInformationMessage(`📤 Completed ${processedFiles}/${totalFiles} conversations...`);
+                    }
+                    
+                } catch (error: any) {
+                    loggers.cloudSync.error(`Failed to update local summary for ${sessionId}:`, error);
+                    results.push({
+                        success: false,
+                        operation: 'upload',
+                        sessionId: conversation.sessionId,
+                        projectName: conversation.projectName,
+                        error: `Local update failed: ${error.message}`
+                    });
+                }
+            }
+            
+            vscode.window.showInformationMessage(`✅ Batch upload completed: ${processedFiles}/${totalFiles} conversations uploaded successfully`);
+            
+        } catch (error: any) {
+            loggers.cloudSync.error('Batch upload failed:', error);
+            
+            // Mark all remaining as failed
+            for (const [sessionId, { conversation }] of conversationMetadata) {
+                results.push({
+                    success: false,
+                    operation: 'upload',
+                    sessionId: conversation.sessionId,
+                    projectName: conversation.projectName,
+                    error: `Batch upload failed: ${error.message}`
+                });
+            }
+            
+            // Get WebDAV configuration for detailed error reporting
+            const credentials = await this.authManager.getCredentials('webdav');
+            const serverInfo = credentials ? 
+                `Server: ${credentials.credentials.serverUrl}, User: ${credentials.credentials.username}` : 
+                'Server info unavailable';
+            
+            vscode.window.showErrorMessage(`❌ Batch upload failed\n${serverInfo}\nError: ${error.message}`);
+        }
+    }
+
+    /**
+     * Upload a single conversation (legacy method for compatibility)
      */
     private async uploadConversation(
         conversation: ConversationSummary,
@@ -406,64 +526,15 @@ export class CloudSyncService {
         processingOptions: ProcessingOptions,
         encryptionPassword?: string
     ): Promise<SyncResult> {
-        // Note: needsSync check should be done before calling this method for optimization
-
-        // Create cloud summary
-        const cloudSummary = await this.dataProcessor.createCloudSummary(
-            conversation.filePath,
-            { ...processingOptions, encryptionPassword }
-        );
-
-        // Upload summary
-        const summaryData = Buffer.from(JSON.stringify(cloudSummary, null, 2));
-        const processedSummaryData = await this.dataProcessor.processForUpload(summaryData, {
-            compress: processingOptions.compress,
-            encrypt: processingOptions.encrypt,
-            encryptionPassword
-        });
-
-        // Build full WebDAV path using the configured base path
-        const fullCloudPath = this.webdavProvider.buildUseCasePath(cloudSummary.cloudSync.cloudPath);
-        loggers.cloudSync.info(`Uploading summary to path: ${fullCloudPath}`);
-        await this.webdavProvider.put(
-            fullCloudPath,
-            processedSummaryData,
-            conversation.sessionId
-        );
-
-        // Upload full conversation if required
-        if (options.mode === 'full-conversations' || 
-           (options.mode === 'smart-sync' && this.shouldIncludeFullConversation(conversation))) {
-            
-            const conversationData = await fs.readFile(conversation.filePath);
-            const processedConversationData = await this.dataProcessor.processForUpload(conversationData, {
-                compress: processingOptions.compress,
-                encrypt: processingOptions.encrypt,
-                encryptionPassword
-            });
-
-            const conversationCloudPath = cloudSummary.cloudSync.cloudPath
-                .replace('summaries/', 'conversations/')
-                .replace('.summary.json', '.jsonl');
-
-            // Build full WebDAV path using the configured base path
-            const fullConversationPath = this.webdavProvider.buildUseCasePath(conversationCloudPath);
-            loggers.cloudSync.info(`Uploading full conversation to path: ${fullConversationPath}`);
-            await this.webdavProvider.put(
-                fullConversationPath,
-                processedConversationData,
-                conversation.sessionId
-            );
-        }
-
-        // Update local summary file
-        await this.updateLocalSummary(conversation, cloudSummary.cloudSync);
-
-        return {
-            success: true,
+        // Use batch upload for single conversation for consistency
+        const results: SyncResult[] = [];
+        await this.batchUploadConversations([conversation], options, processingOptions, encryptionPassword, results);
+        return results[0] || {
+            success: false,
             operation: 'upload',
             sessionId: conversation.sessionId,
-            projectName: conversation.projectName
+            projectName: conversation.projectName,
+            error: 'No result from batch upload'
         };
     }
 
