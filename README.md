@@ -306,83 +306,13 @@ For security issues, please report them privately via GitHub's security advisory
 
 ## Changelog
 
-### v3.3.4 - Security Fix & Dependency Updates
-- **🔒 Security Fix**: Replaced MD5 with SHA256 in SummaryCache for cryptographic security compliance
-- **📦 Dependencies Updated**: Updated @eslint/js to 9.32.0 and 13 other development dependencies
-- **✅ CodeQL Compliance**: Resolved security alert for weak cryptographic algorithm usage
-- **🛡️ Enhanced Security**: All Dependabot security alerts resolved
-- **📝 Documentation Updates**: Improved privacy statement transparency and streamlined Features section
+For detailed release notes and version history, see [CHANGELOG.md](./CHANGELOG.md).
 
-### v3.3.3 - ccusage Loading Experience Improvements
-- **🚀 Improved Loading State**: Added immediate loading spinner for ccusage initialization
-- **📊 Progressive Feedback**: Shows "Initializing ccusage..." with extended message after 10 seconds
-- **🔧 Better Error Messages**: Clearer feedback when npx/npm is downloading ccusage package
-- **✨ Smoother UX**: Users now understand why initial load takes time (package download)
-- **🎨 Theme-Aware Loading**: Beautiful loading animation that matches VS Code theme
-- **📝 Enhanced Logging**: Improved debug logging for troubleshooting ccusage integration
-
-### v3.3.2 - Codebase Maintenance & ccusage Integration Stability Release
-- **🧹 Code Cleanup**: Removed experimental and incomplete features, focused on core stable functionality
-- **🔧 ccusage Integration**: Maintained and stabilized ccusage CLI integration for accurate usage tracking
-- **📦 Release Preparation**: Cleaned up build artifacts and streamlined codebase for marketplace
-- **🛠️ Architecture Refinement**: Simplified extension architecture focusing on proven features
-- **📋 Documentation Updates**: Updated documentation to reflect current stable feature set
-- **🚀 Core Features**: CLAUDE.md management, conversation history browser, PROJECT_PLAN integration, and ccusage-powered usage tracking
-
-### v3.3.0 - WebDAV Cloud Sync Integration (Major Release)
-- **🆕 WebDAV Cloud Sync**: Complete WebDAV synchronization architecture supporting Nextcloud, ownCloud, and generic WebDAV servers
-- **🆕 Self-Hosted Privacy**: Full control over your data with self-hosted cloud storage solutions
-- **🆕 Cross-Device Sync**: Synchronize conversations and usage statistics across multiple devices
-- **🆕 Secure Authentication**: Username/password authentication with SSL certificate validation for self-signed certificates
-- **🆕 Optional Encryption**: AES-256-GCM encryption for sensitive conversation data before upload
-- **🆕 Conflict Resolution**: Smart merge strategies for concurrent modifications across devices
-- **🆕 Integrated UI**: Seamless left panel integration with "Sync to Cloud" and "Cloud Settings" buttons
-- **🔧 Architecture Simplification**: Removed multi-provider complexity in favor of focused WebDAV support
-- **🔧 Enhanced Security**: PBKDF2 key derivation and secure credential storage using VSCode SecretStorage API
-- **🔧 Better Privacy**: No dependency on third-party commercial cloud providers
-
-### v3.2.1 - Icon Visibility Fix
-- **FIXED**: Extension icon now appears in activity bar even when no workspace is open
-- **NEW**: Graceful no-workspace handling with helpful messages to open a folder
-- **IMPROVED**: Conversation browser functionality works without requiring a workspace
-- **UX**: Better user onboarding with clear prompts to open workspace for full features
-
-### v3.2.0 - Enhanced Conversation Viewer UI
-- **NEW**: Expand All and Collapse All buttons for quick conversation section management
-- **NEW**: Asymmetrical metadata layout with dedicated sections for short and long values
-- **IMPROVED**: Optimized metadata display with better space utilization and readability
-- **IMPROVED**: Compact header design with reduced spacing while maintaining accessibility
-- **IMPROVED**: Better text overflow handling for long paths and identifiers
-- **UI**: Enhanced conversation viewer controls with intuitive expand/collapse functionality
-
-### v3.1.0+ - PROJECT_PLAN Integration & Search Enhancement
-- **NEW**: PROJECT_PLAN Integration - Automatic creation and maintenance of project plans
-- **NEW**: Automatic CLAUDE.md Rule Injection - Automatically adds PROJECT_PLAN instructions to CLAUDE.md (main feature)
-- **NEW**: Plan Mode Integration - PROJECT_PLAN.md serves as central repository for plan mode
-- **NEW**: Enhanced Search - Sticky search bar with navigation buttons, highlighting, keyboard shortcuts, and automatic scrolling
-- **NEW**: Manual Override Command - "Add PROJECT_PLAN Rule to CLAUDE.md" command for manual control
-- **IMPROVED**: Enhanced security compliance with automatic .gitignore rules
-- **FIXED**: Resolved extension crash issues during initialization
-- **IMPROVED**: Better sync workflow with file validation and security checks
-- **CLEANUP**: Removed unused template system for cleaner codebase
-
-### v3.1.0 - Major Conversation History Features
-- **NEW**: Conversation History Browser with rich webview interface
-- **NEW**: Project-organized conversation tree view
-- **NEW**: Multiple export formats (Markdown, JSON, Plain Text)
-- **NEW**: Real-time conversation search functionality
-- **SECURITY**: Enhanced security measures with path sanitization
-- **SECURITY**: Automatic .gitignore rules for conversation data protection
-- **IMPROVED**: GitHub push protection compliance
-
-### v3.0.0 - Conversation Viewer Foundation
-- **NEW**: Basic conversation history parsing and viewing
-- **NEW**: JSONL conversation file support
-- **IMPROVED**: Security enhancements and input validation
-
-### v2.x - Core CLAUDE.md Management
-- **FEATURE**: Git integration for CLAUDE.md synchronization
-- **FEATURE**: Auto-sync functionality with file watching
+**Latest Release**: v3.4.0 - WebDAV Sync Optimization & Resume Capability
+- Smart sync with hash-based change detection
+- Resume capability for interrupted sessions  
+- Optimized batch operations for reduced server load
+- Enhanced sync state metadata tracking
 
 ## License
 
