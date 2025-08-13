@@ -365,7 +365,7 @@
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.37.0",
-    "eslint": "^9.32.0",
+    "eslint": "^9.33.0",
     "sharp": "^0.34.3",
     "typescript": "^5.9.2",
     "@types/xml2js": "^0.4.14",
