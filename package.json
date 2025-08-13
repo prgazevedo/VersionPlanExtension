@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, PROJECT_PLAN integration with Git, ccusage-powered usage tracking, and WebDAV cloud synchronization",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",

@@ -2,6 +2,16 @@
 
 All notable changes to the "Claude Config Manager" extension will be documented in this file.
 
+## [3.4.1] - 2025-01-11
+
+### Security
+- **Packaging Security**: Added `.vscodeignore` to properly exclude development files from distribution
+- **Package Optimization**: Reduced package size from 2.42MB to 177KB
+
+### Fixed
+- Fixed VSIX packaging configuration
+- Improved file exclusion patterns for cleaner distribution
+
 ## [3.4.0] - 2025-01-11
 
 ### Added

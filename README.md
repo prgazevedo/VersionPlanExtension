@@ -308,11 +308,11 @@ For security issues, please report them privately via GitHub's security advisory
 
 For detailed release notes and version history, see [CHANGELOG.md](./CHANGELOG.md).
 
-**Latest Release**: v3.4.0 - WebDAV Sync Optimization & Resume Capability
+**Latest Release**: v3.4.1 - Security & Packaging Update
+- Improved packaging security with proper file exclusions
+- Optimized package size (reduced by 93% to 177KB)
+- WebDAV sync optimizations from v3.4.0
 - Smart sync with hash-based change detection
-- Resume capability for interrupted sessions  
-- Optimized batch operations for reduced server load
-- Enhanced sync state metadata tracking
 
 ## License
 
