@@ -346,7 +346,94 @@ ccusage CLI → CcusageService → CloudTokenTracker → WebDAV Provider → Clo
   - "In your exit plan": MUST list sections to update
   - "After approval": Execute updates alongside code changes
 
-## v4.0 Features - Claude Team Orchestrator (Major Release)
+## v3.5.0 Features - Claude Conversation Fork Manager (Next Release)
+
+### Overview
+Add conversation fork visualization and management to help users control context window usage and prevent unexpected compacting.
+
+### Research Findings
+- Claude Code conversations use parentUuid to create tree structures
+- Real forks exist: Found conversations with 2+ branches from same parent message
+- Sample analysis: 297-message conversation had 2 fork points where user edited/retried
+- Fork structure: Assistant message → Multiple user responses exploring different approaches
+- No existing fork visualization or management in current extension
+
+### Core Features (Simplified Implementation)
+
+#### 1. Fork Visualization Tree View
+- Display conversations as interactive tree showing parent-child relationships
+- Show fork points where conversations branched (multiple children from same parent)
+- Visual token count indicators per branch (green/yellow/red)
+- Expandable/collapsible nodes for clean interface
+
+#### 2. Real-Time Context Monitor
+- Live token counter showing current context size
+- Visual warning system when approaching Claude's compacting threshold
+- Per-branch token usage breakdown
+- Distance-to-limit indicator
+
+#### 3. Basic Branch Management
+- Mark branches as "inactive" to exclude from context calculations
+- Delete abandoned exploration branches
+- Simple pruning commands for manual context control
+- Fork creation notifications
+
+#### 4. Context Warning System
+- Alert when approaching context limits
+- Show which branches consume most tokens
+- Suggest pruning candidates before auto-compacting occurs
+
+### Technical Architecture
+
+```typescript
+src/conversation/fork/
+├── ForkAnalyzer.ts          // Parse JSONL parentUuid structure
+├── ForkTreeProvider.ts      // VSCode TreeDataProvider implementation  
+├── TokenCalculator.ts       // Accurate token counting per branch
+├── ForkViewer.ts           // Webview for tree visualization
+└── BranchManager.ts        // Basic pruning operations
+```
+
+### Implementation Data Structures
+
+```typescript
+interface ConversationFork {
+    parentUuid: string;
+    branches: ConversationBranch[];
+    totalTokens: number;
+    createdAt: Date;
+}
+
+interface ConversationBranch {
+    startUuid: string;
+    messages: ConversationMessage[];
+    tokenCount: number;
+    isActive: boolean;
+    isMainPath: boolean;
+}
+```
+
+### Success Metrics
+- Reduce unexpected compacting incidents by 50%+
+- User awareness of fork structure: >90%
+- Manual context management adoption: >30%
+- Average tokens saved through pruning: 20%+
+
+### Future Enhancements (Deferred)
+- Branch export/import capabilities
+- Branch merge operations  
+- Checkpoint system for conversation states
+- Auto-pruning algorithms
+- Advanced conflict resolution
+
+### Why This Over V4.0 Team Orchestrator
+- Addresses immediate user pain point (context compacting)
+- Simpler implementation (2-3 weeks vs 12+ weeks)
+- Uses existing Claude Code data (no external dependencies)
+- Practical value from day one
+- Foundation for future advanced features
+
+## v4.0 Features - Claude Team Orchestrator (Deferred to Future Release)
 
 ### Overview
 Transform extension from configuration manager to full AI team orchestrator with specialized Claude instances working in parallel on different aspects of the project.
@@ -451,34 +538,119 @@ interface ContextDistribution {
 
 ### Implementation Phases
 
-#### Phase 1: Foundation (v3.4.0) - 2 weeks
+#### v3.5.0 Implementation Plan
+
+##### Phase 1: Data Analysis & Fork Detection (Week 1)
+- Implement ForkAnalyzer to parse parentUuid structures from JSONL
+- Build conversation tree data structure
+- Calculate token counts per branch
+- Identify fork points in existing conversations
+
+##### Phase 2: Tree Visualization (Week 2)  
+- Create ForkTreeProvider for sidebar integration
+- Build interactive tree view with expand/collapse
+- Add token count badges and color coding
+- Implement basic navigation between tree nodes
+
+##### Phase 3: Context Monitoring (Week 3)
+- Real-time token counting integration
+- Warning system for approaching limits
+- Context usage dashboard
+- Branch pruning commands
+
+##### Phase 4: Polish & Testing (Week 4)
+- User experience refinements
+- Performance optimization
+- Edge case handling
+- Documentation and examples
+
+#### v4.0.0 Implementation Plan (Deferred)
+
+##### Phase 1: Foundation (v3.4.0) - 2 weeks
 - ✅ Context7 integration via CLAUDE.md
 - ✅ Context Building support with hybrid detection
 - ✅ Improved plan mode instructions
 - ✅ Basic prompt templates
 
-#### Phase 2: Team Infrastructure (v4.0.0) - 3 weeks
+##### Phase 2: Team Infrastructure (v4.0.0) - 3 weeks
 - Git worktree management commands
 - `.claude/team/` structure with role configs
 - `.claude/.shared-artifacts/` system
 - Basic team UI in sidebar
 - Role assignment commands
 
-#### Phase 3: Intelligence Layer (v4.1.0) - 3 weeks
+##### Phase 3: Intelligence Layer (v4.1.0) - 3 weeks
 - Context inheritance system
 - Automatic handoff detection
 - Smart context distribution
 - Living PROJECT_PLAN.md dashboard
 - Team metrics tracking
 
-#### Phase 4: Advanced Orchestration (v4.2.0) - 4 weeks
+##### Phase 4: Advanced Orchestration (v4.2.0) - 4 weeks
 - AI-suggested role assignment
 - Automatic conflict resolution
 - Performance analytics dashboard
 - Workflow optimization suggestions
 - Team collaboration patterns
 
+## Claude Code Conversation Structure Research
+
+### JSONL Message Format
+```json
+{
+  "uuid": "unique-message-id",
+  "parentUuid": "parent-message-id-or-null", 
+  "type": "user|assistant",
+  "message": {
+    "role": "user|assistant",
+    "content": "message content"
+  },
+  "timestamp": "2025-08-17T...",
+  "sessionId": "conversation-session-id"
+}
+```
+
+### Fork Patterns Discovered
+- Fork occurs when user edits previous message or retries
+- Creates multiple messages with same parentUuid
+- Example: Assistant response → 2+ user responses exploring different approaches
+- Sample data: 297-message conversation had 2 distinct fork points
+- Fork timestamps show user iteration patterns (10-minute gaps between attempts)
+
+### Token Calculation Considerations
+- Context window includes full message chain from root to current
+- Forked branches consume tokens even if not in current path
+- Claude's compacting algorithm not documented - need empirical testing
+- Tool use messages have different token weights than text messages
+
+### Conversation Tree Structure
+```
+Root Message (parentUuid: null)
+├── Assistant Response 1
+│   ├── User Response A (main path)
+│   │   └── Assistant Response 2
+│   │       └── User Response B
+│   └── User Response A' (fork - alternative approach)
+│       └── Assistant Response 2'
+└── Assistant Response 1' (another fork)
+    └── User Response C
+```
+
+### Implementation Findings
+- parentUuid creates reliable tree structure
+- Real forks exist in production conversations
+- Multiple conversation files show 1-3 fork points each
+- Fork detection algorithm: `children_count = messages.filter(m => m.parentUuid === target_uuid).length`
+- Average fork depth: 2-3 levels before convergence or abandonment
+
 ## Technical Architecture Updates
+
+### v3.5.0 New Components
+- `src/conversation/fork/ForkAnalyzer.ts` - Parse JSONL parentUuid structure
+- `src/conversation/fork/ForkTreeProvider.ts` - VSCode TreeDataProvider implementation  
+- `src/conversation/fork/TokenCalculator.ts` - Accurate token counting per branch
+- `src/conversation/fork/ForkViewer.ts` - Webview for tree visualization
+- `src/conversation/fork/BranchManager.ts` - Basic pruning operations
 
 ### v3.4.0 New Components
 - `src/services/Context7Manager.ts` - Context7 MCP integration
