@@ -158,6 +158,24 @@
         "title": "Set WebDAV Password",
         "category": "Claude Config",
         "icon": "$(key)"
+      },
+      {
+        "command": "claude-config.loadConversationForForkAnalysis",
+        "title": "Load Conversation for Fork Analysis",
+        "category": "Claude Config",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "claude-config.refreshForkTree",
+        "title": "Refresh Fork Tree",
+        "category": "Claude Config",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claude-config.exportForkAnalysis",
+        "title": "Export Fork Analysis",
+        "category": "Claude Config",
+        "icon": "$(export)"
       }
     ],
     "viewsContainers": {
@@ -182,6 +200,10 @@
         {
           "id": "claude-usage-monitor",
           "name": "CCUsage Monitor"
+        },
+        {
+          "id": "claude-fork-manager",
+          "name": "Fork Manager"
         }
       ]
     },
@@ -209,6 +231,10 @@
       {
         "view": "claude-usage-monitor",
         "contents": "Real-time Claude usage monitoring powered by ccusage.\nShows actual token usage, costs, and model breakdowns.\n[Install ccusage Help](command:claude-config.installCcusageHelp) | [Debug Integration](command:claude-config.debugCcusage)"
+      },
+      {
+        "view": "claude-fork-manager",
+        "contents": "Visualize and manage conversation forks to control context window usage.\n\n**Fork Manager** helps you:\n• See conversation tree structure\n• Identify token usage by branch\n• Prune unused conversation paths\n• Prevent unexpected compacting\n\n[Load Conversation](command:claude-config.loadConversationForForkAnalysis)"
       }
     ],
     "configuration": {

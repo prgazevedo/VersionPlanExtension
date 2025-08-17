@@ -9,6 +9,8 @@ import { ConversationManager } from './conversation/ConversationManager';
 import { ConversationTreeProvider } from './conversation/ConversationTreeProvider';
 import { ConversationViewer } from './conversation/ConversationViewer';
 import { UsageMonitorTreeProvider } from './UsageMonitorTreeProvider';
+import { ForkTreeProvider } from './conversation/fork/ForkTreeProvider';
+import { ForkCommands } from './conversation/fork/ForkCommands';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
@@ -26,6 +28,7 @@ let conversationManager: ConversationManager;
 let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
 let usageMonitorTreeProvider: UsageMonitorTreeProvider;
+let forkTreeProvider: ForkTreeProvider;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 
@@ -409,6 +412,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Initialize tree providers
     usageMonitorTreeProvider = new UsageMonitorTreeProvider();
+    forkTreeProvider = new ForkTreeProvider();
     
     // Refresh tree providers
     setTimeout(() => {
@@ -430,6 +434,11 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.createTreeView('claude-usage-monitor', {
         treeDataProvider: usageMonitorTreeProvider,
         showCollapseAll: false
+    });
+
+    vscode.window.createTreeView('claude-fork-manager', {
+        treeDataProvider: forkTreeProvider,
+        showCollapseAll: true
     });
 
 
@@ -572,6 +581,9 @@ export async function activate(context: vscode.ExtensionContext) {
     ];
 
     commands.forEach(command => context.subscriptions.push(command));
+
+    // Register fork management commands
+    ForkCommands.registerCommands(context, forkTreeProvider);
 
     // Start file watching if auto-sync is enabled
     if (vscode.workspace.getConfiguration('claude-config').get('autoSync')) {
