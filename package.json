@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, PROJECT_PLAN integration with Git, ccusage-powered usage tracking, and WebDAV cloud synchronization",
-  "version": "3.4.1",
+  "version": "3.5.2",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -176,6 +176,30 @@
         "title": "Export Fork Analysis",
         "category": "Claude Config",
         "icon": "$(export)"
+      },
+      {
+        "command": "claude-config.showContextDashboard",
+        "title": "Show Context Dashboard",
+        "category": "Claude Config",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "claude-config.refreshContextMonitoring",
+        "title": "Refresh Context Monitoring",
+        "category": "Claude Config",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claude-config.showPruningRecommendations",
+        "title": "Show Pruning Recommendations",
+        "category": "Claude Config",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "claude-config.showBranchBackups",
+        "title": "Show Branch Backups",
+        "category": "Claude Config",
+        "icon": "$(history)"
       }
     ],
     "viewsContainers": {
@@ -234,7 +258,7 @@
       },
       {
         "view": "claude-fork-manager",
-        "contents": "Visualize and manage conversation forks to control context window usage.\n\n**Fork Manager** helps you:\n• See conversation tree structure\n• Identify token usage by branch\n• Prune unused conversation paths\n• Prevent unexpected compacting\n\n[Load Conversation](command:claude-config.loadConversationForForkAnalysis)"
+        "contents": "Visualize and manage conversation forks to control context window usage.\n\n**Fork Manager** helps you:\n• See conversation tree structure\n• Real-time context monitoring\n• Smart pruning recommendations\n• Prevent unexpected compacting\n\n[Load Conversation](command:claude-config.loadConversationForForkAnalysis)\n[Context Dashboard](command:claude-config.showContextDashboard)\n[Pruning Guide](command:claude-config.showPruningRecommendations)"
       }
     ],
     "configuration": {
@@ -351,7 +375,11 @@
         },
         "claude-config.cloudSync.conflictResolution": {
           "type": "string",
-          "enum": ["local", "remote", "ask"],
+          "enum": [
+            "local",
+            "remote",
+            "ask"
+          ],
           "default": "ask",
           "description": "Default conflict resolution strategy"
         },
@@ -388,19 +416,19 @@
     "@eslint/js": "^9.32.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "24.x",
+    "@types/node-fetch": "^2.6.11",
     "@types/vscode": "^1.74.0",
+    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.37.0",
     "eslint": "^9.32.0",
     "sharp": "^0.34.3",
-    "typescript": "^5.9.2",
-    "@types/xml2js": "^0.4.14",
-    "@types/node-fetch": "^2.6.11"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
-    "fs-extra": "^11.1.1",
-    "simple-git": "^3.19.1",
+    "fs-extra": "^11.3.1",
     "node-fetch": "^2.7.0",
+    "simple-git": "^3.19.1",
     "xml2js": "^0.6.2"
   }
 }

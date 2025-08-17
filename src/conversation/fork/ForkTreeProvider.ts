@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs-extra';
+import * as os from 'os';
 import { ForkAnalyzer } from './ForkAnalyzer';
 import { TokenCalculator } from './TokenCalculator';
 import { ConversationTree, ConversationFork, ConversationBranch, ForkAnalysisResult } from './types';
@@ -37,9 +39,64 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
     }
 
     /**
+     * Setup with ConversationManager and auto-load recent conversation
+     */
+    async setupWithConversationManager(conversationManager: any): Promise<void> {
+        // Listen to conversation changes
+        conversationManager.onConversationsChanged(() => {
+            this.refresh();
+        });
+
+        // Auto-load the most recent conversation
+        await this.autoLoadRecentConversation();
+    }
+
+    /**
+     * Automatically load the most recent conversation
+     */
+    async autoLoadRecentConversation(): Promise<void> {
+        try {
+            const config = vscode.workspace.getConfiguration('claude-config');
+            const conversationPath = config.get<string>('conversationDataPath') || 
+                path.join(os.homedir(), '.claude', 'projects');
+            
+            if (await fs.pathExists(conversationPath)) {
+                const files = await fs.readdir(conversationPath);
+                const jsonlFiles = files.filter((f: string) => f.endsWith('.jsonl'));
+                
+                if (jsonlFiles.length > 0) {
+                    // Get the most recently modified file
+                    const mostRecent = jsonlFiles
+                        .map((f: string) => ({ 
+                            name: f, 
+                            path: path.join(conversationPath, f) 
+                        }))
+                        .sort((a, b) => {
+                            try {
+                                const statA = fs.statSync(a.path);
+                                const statB = fs.statSync(b.path);
+                                return statB.mtime.getTime() - statA.mtime.getTime();
+                            } catch {
+                                return 0;
+                            }
+                        })[0];
+                    
+                    if (mostRecent) {
+                        console.log(`[ForkTreeProvider] Auto-loading recent conversation: ${mostRecent.name}`);
+                        await this.loadConversationFile(mostRecent.path);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[ForkTreeProvider] Error auto-loading recent conversation:', error);
+        }
+    }
+
+    /**
      * Refresh the tree view
      */
     refresh(): void {
+        console.log('[ForkTreeProvider] Refresh called');
         this._onDidChangeTreeData.fire();
     }
 

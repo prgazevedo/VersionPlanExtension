@@ -23,6 +23,7 @@ export class UsageMonitorTreeProvider implements vscode.TreeDataProvider<UsageMo
     }
 
     refresh(): void {
+        console.log('[UsageMonitorTreeProvider] Refresh called');
         this._onDidChangeTreeData.fire();
     }
 

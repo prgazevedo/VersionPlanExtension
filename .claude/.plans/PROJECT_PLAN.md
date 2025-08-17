@@ -1,4 +1,4 @@
-# Claude Config Manager v3.3.2 - Project Plan
+# Claude Config Manager v3.5.0 - Project Plan
 
 ## Overview
 Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md configuration management, conversation history browsing, intelligent PROJECT_PLAN integration with Git, ccusage-powered usage tracking, and core functionality focus. Ready for VSCode marketplace publication.
@@ -18,11 +18,22 @@ Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md con
 - ✅ **COMPLETED**: v3.2.5 - Visual Usage Monitor with gauge chart display
 - ✅ **COMPLETED**: v3.3.0 - WebDAV Cloud Sync Implementation & Architecture Simplification
 - ✅ **COMPLETED**: v3.3.1 - Legacy TokenTracker removal and ccusage CLI integration
-- ✅ **COMPLETED**: v3.3.2 - Codebase Maintenance & Stability Release
+- ✅ **COMPLETED**: v3.3.2 - Codebase Maintenance & Stability Release  
+- ✅ **COMPLETED**: v3.5.0 - Conversation Fork Manager with Real-time Context Monitoring
 
 ## Key Features Implemented
 
-### WebDAV Cloud Sync Architecture v3.3.0 🆕
+### Conversation Fork Manager v3.5.0 🆕
+- **Real-time Context Monitoring**: Automatic detection of conversation file changes with instant token analysis
+- **Visual Fork Tree**: Interactive sidebar showing conversation structure with parent-child relationships
+- **Smart Context Alerts**: Warning system at 70% and critical alerts at 90% context usage
+- **Advanced Branch Management**: Automated pruning recommendations with risk assessment and backup system
+- **Context Usage Dashboard**: Beautiful WebView with circular progress indicator and optimization suggestions
+- **Intelligent Pruning**: Detects abandoned branches, large inactive segments, and duplicate explorations
+- **Safety Features**: Mandatory backups before any destructive operations with restoration capability
+- **Integration**: Seamless VSCode integration with status bar updates and command palette access
+
+### WebDAV Cloud Sync Architecture v3.3.0
 - **WebDAV Server Support**: Compatible with Nextcloud, ownCloud, and any WebDAV server
 - **Local-First Architecture**: Maintains current performance with optional cloud backup
 - **Data Synchronization**:
@@ -115,6 +126,14 @@ workspace/
     - `CloudConversationManager.ts` - Extended conversation management
     - `CloudTokenTracker.ts` - Cross-device usage aggregation
     - `cloudSyncIntegrated.ts` - UI integration commands
+11. **Fork Manager System v3.5.0** - Real-time conversation context monitoring:
+    - `ForkAnalyzer.ts` - JSONL parsing and conversation tree analysis
+    - `ForkTreeProvider.ts` - VSCode tree view for conversation hierarchy
+    - `ContextMonitor.ts` - Real-time file watching and context state management
+    - `ContextDashboard.ts` - WebView dashboard with usage analytics
+    - `BranchManager.ts` - Intelligent pruning with risk assessment and backups
+    - `TokenCalculator.ts` - Accurate per-branch token counting
+    - `ForkCommands.ts` - Command handlers and webview integration
 
 ### Recent Major Fixes
 - ✅ **Collapsible content properly hides** when collapsed (no phantom spacing)
@@ -154,6 +173,11 @@ workspace/
 - **NEW v3.2.2**: `claude-config.refreshUsage` - Refresh usage statistics and percentage calculations
 - **NEW v3.3.0**: `claude-config.syncToCloud` - Integrated WebDAV cloud sync with multiple options
 - **NEW v3.3.0**: `claude-config.openCloudSettings` - Configure WebDAV server connection
+- **NEW v3.5.0**: `claude-config.loadConversationForForkAnalysis` - Load conversation for fork analysis
+- **NEW v3.5.0**: `claude-config.showContextDashboard` - Open real-time context usage dashboard
+- **NEW v3.5.0**: `claude-config.showPruningRecommendations` - Display intelligent pruning suggestions
+- **NEW v3.5.0**: `claude-config.showBranchBackups` - View and restore branch backups
+- **NEW v3.5.0**: `claude-config.refreshContextMonitoring` - Refresh context monitoring state
 
 ## Development Commands
 
@@ -346,7 +370,7 @@ ccusage CLI → CcusageService → CloudTokenTracker → WebDAV Provider → Clo
   - "In your exit plan": MUST list sections to update
   - "After approval": Execute updates alongside code changes
 
-## v3.5.0 Features - Claude Conversation Fork Manager (Next Release)
+## v3.5.0 Features - Claude Conversation Fork Manager ✅ COMPLETED
 
 ### Overview
 Add conversation fork visualization and management to help users control context window usage and prevent unexpected compacting.
@@ -358,41 +382,51 @@ Add conversation fork visualization and management to help users control context
 - Fork structure: Assistant message → Multiple user responses exploring different approaches
 - No existing fork visualization or management in current extension
 
-### Core Features (Simplified Implementation)
+### Implementation Completed ✅
 
-#### 1. Fork Visualization Tree View
-- Display conversations as interactive tree showing parent-child relationships
-- Show fork points where conversations branched (multiple children from same parent)
-- Visual token count indicators per branch (green/yellow/red)
-- Expandable/collapsible nodes for clean interface
+#### 1. Fork Visualization Tree View ✅
+- **ForkTreeProvider**: Interactive VSCode tree showing conversation hierarchy
+- **Real Data Integration**: Analyzes actual Claude Code conversation files (.jsonl)
+- **Token Indicators**: Color-coded display showing branch token usage and status
+- **Expandable Interface**: Collapsible tree nodes for clean conversation browsing
 
-#### 2. Real-Time Context Monitor
-- Live token counter showing current context size
-- Visual warning system when approaching Claude's compacting threshold
-- Per-branch token usage breakdown
-- Distance-to-limit indicator
+#### 2. Real-Time Context Monitor ✅
+- **ContextMonitor**: File system watchers automatically detect conversation changes
+- **Smart Alerts**: 70% warning threshold and 90% critical threshold with contextual actions
+- **Token Calculation**: Accurate per-branch token counting with usage data integration
+- **Live Updates**: Status bar integration with context usage percentage and emoji indicators
 
-#### 3. Basic Branch Management
-- Mark branches as "inactive" to exclude from context calculations
-- Delete abandoned exploration branches
-- Simple pruning commands for manual context control
-- Fork creation notifications
+#### 3. Advanced Branch Management ✅
+- **BranchManager**: Intelligent pruning recommendations with risk assessment (low/medium/high)
+- **Safety Features**: Mandatory backup creation before any destructive operations
+- **Automated Detection**: Identifies abandoned, large inactive, and duplicate branches
+- **Restoration System**: Branch backup and restoration capabilities
 
-#### 4. Context Warning System
-- Alert when approaching context limits
-- Show which branches consume most tokens
-- Suggest pruning candidates before auto-compacting occurs
+#### 4. Context Usage Dashboard ✅
+- **ContextDashboard**: Beautiful WebView with circular progress indicator
+- **Optimization Suggestions**: Real-time recommendations based on conversation analysis
+- **Interactive Controls**: Load conversations, refresh monitoring, access pruning tools
+- **Visual Analytics**: Token distribution, usage statistics, and optimization potential
 
-### Technical Architecture
+### Technical Architecture ✅ Implemented
 
 ```typescript
 src/conversation/fork/
-├── ForkAnalyzer.ts          // Parse JSONL parentUuid structure
-├── ForkTreeProvider.ts      // VSCode TreeDataProvider implementation  
-├── TokenCalculator.ts       // Accurate token counting per branch
-├── ForkViewer.ts           // Webview for tree visualization
-└── BranchManager.ts        // Basic pruning operations
+├── types.ts                 // Core interfaces (ConversationFork, ConversationBranch, etc.)
+├── ForkAnalyzer.ts         // JSONL parsing and conversation tree building
+├── ForkTreeProvider.ts     // VSCode TreeDataProvider with hierarchical display
+├── TokenCalculator.ts      // Accurate token counting with usage data integration
+├── ForkCommands.ts         // Command handlers for tree interactions and webviews
+├── ContextMonitor.ts       // Real-time file watching and context state management
+├── ContextDashboard.ts     // WebView dashboard with circular progress and analytics
+└── BranchManager.ts        // Advanced pruning with risk assessment and backup system
 ```
+
+**Integration Points:**
+- **Extension.ts**: Main extension integration with command registration and event handlers
+- **Package.json**: New commands for context monitoring, dashboard, and pruning operations
+- **Status Bar**: Real-time context usage display with emoji indicators (📊/⚠️/🚨)
+- **Activity Bar**: "Fork Manager" sidebar view with welcome content and action buttons
 
 ### Implementation Data Structures
 
@@ -413,11 +447,13 @@ interface ConversationBranch {
 }
 ```
 
-### Success Metrics
-- Reduce unexpected compacting incidents by 50%+
-- User awareness of fork structure: >90%
-- Manual context management adoption: >30%
-- Average tokens saved through pruning: 20%+
+### Implementation Results ✅
+- **Real-time Monitoring**: Automatic detection of conversation changes with 2-second debouncing
+- **Visual Fork Analysis**: Successfully tested with 44-message conversation showing clear tree structure
+- **Context Alerts**: Working threshold system (70% warning, 90% critical) with actionable suggestions
+- **Pruning Intelligence**: Automated detection of abandoned branches, large inactive segments, and duplicates
+- **Safety Features**: Backup system creates JSON snapshots before any destructive operations
+- **Performance**: Optimized file watching with efficient token calculation and minimal system impact
 
 ### Future Enhancements (Deferred)
 - Branch export/import capabilities

@@ -11,6 +11,9 @@ import { ConversationViewer } from './conversation/ConversationViewer';
 import { UsageMonitorTreeProvider } from './UsageMonitorTreeProvider';
 import { ForkTreeProvider } from './conversation/fork/ForkTreeProvider';
 import { ForkCommands } from './conversation/fork/ForkCommands';
+import { ContextMonitor } from './conversation/fork/ContextMonitor';
+import { ContextDashboard } from './conversation/fork/ContextDashboard';
+import { BranchManager } from './conversation/fork/BranchManager';
 import { syncCommand } from './commands/sync';
 import { editCommand } from './commands/edit';
 import { openConversationsCommand, viewConversationCommand, exportConversationCommand, exportAllConversationsCommand } from './commands/openConversations';
@@ -29,6 +32,9 @@ let conversationTreeProvider: ConversationTreeProvider;
 let conversationViewer: ConversationViewer;
 let usageMonitorTreeProvider: UsageMonitorTreeProvider;
 let forkTreeProvider: ForkTreeProvider;
+let contextMonitor: ContextMonitor;
+let contextDashboard: ContextDashboard;
+let branchManager: BranchManager;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 
@@ -407,6 +413,10 @@ export async function activate(context: vscode.ExtensionContext) {
     repositoryManager = new RepositoryManager(context);
     fileManager = new ClaudeFileManager(context, repositoryManager);
     conversationManager = new ConversationManager(context);
+    
+    // Allow ConversationManager to initialize its file watchers
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     conversationTreeProvider = new ConversationTreeProvider(conversationManager);
     conversationViewer = new ConversationViewer(context, conversationManager);
     
@@ -414,13 +424,26 @@ export async function activate(context: vscode.ExtensionContext) {
     usageMonitorTreeProvider = new UsageMonitorTreeProvider();
     forkTreeProvider = new ForkTreeProvider();
     
-    // Refresh tree providers
-    setTimeout(() => {
-        usageMonitorTreeProvider.refresh();
-    }, 100);
-
+    // Initialize context monitoring with coordination
+    contextMonitor = new ContextMonitor(context);
+    contextDashboard = new ContextDashboard(context, contextMonitor, forkTreeProvider);
+    branchManager = new BranchManager(context);
+    
+    // Setup coordination with ConversationManager to avoid duplicate file watchers
+    contextMonitor.setupWithConversationManager(conversationManager);
+    await forkTreeProvider.setupWithConversationManager(conversationManager);
+    
     // Create tree data providers and register tree views
     const treeDataProvider = new ClaudeTreeDataProvider();
+    
+    // Refresh tree providers - ensure all are refreshed after setup
+    setTimeout(() => {
+        console.log('[Extension] Refreshing all tree providers after initialization');
+        usageMonitorTreeProvider.refresh();
+        conversationTreeProvider.refresh();
+        forkTreeProvider.refresh();
+        treeDataProvider.refresh();
+    }, 500);
     vscode.window.createTreeView('claude-config', {
         treeDataProvider: treeDataProvider,
         showCollapseAll: false
@@ -577,6 +600,25 @@ export async function activate(context: vscode.ExtensionContext) {
             const stats = SummaryCacheManager.getInstance().getStats();
             const message = `Cache Stats:\n• Entries: ${stats.totalEntries}\n• Hit Ratio: ${(stats.hitRatio * 100).toFixed(1)}%\n• Memory: ${(stats.memoryUsage / 1024).toFixed(1)}KB`;
             vscode.window.showInformationMessage(message);
+        }),
+        vscode.commands.registerCommand('claude-config.showContextDashboard', async () => {
+            await contextDashboard.show();
+        }),
+        vscode.commands.registerCommand('claude-config.refreshContextMonitoring', async () => {
+            await contextMonitor.refresh();
+        }),
+        vscode.commands.registerCommand('claude-config.showPruningRecommendations', async () => {
+            const analysis = forkTreeProvider.getCurrentAnalysis();
+            if (analysis) {
+                const actions = await branchManager.suggestPruningActions(analysis);
+                await showPruningRecommendationsDialog(actions);
+            } else {
+                vscode.window.showWarningMessage('No conversation analysis available. Load a conversation first.');
+            }
+        }),
+        vscode.commands.registerCommand('claude-config.showBranchBackups', async () => {
+            const backups = await branchManager.getAvailableBackups();
+            await showBranchBackupsDialog(backups);
         })
     ];
 
@@ -584,6 +626,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register fork management commands
     ForkCommands.registerCommands(context, forkTreeProvider);
+
+    // Register context monitoring event handlers
+    contextMonitor.onStateChanged(state => {
+        // Update status bar with context usage
+        if (statusBarItem) {
+            const emoji = state.critical ? '🚨' : state.approaching ? '⚠️' : '📊';
+            statusBarItem.text = `${emoji} Context: ${state.usagePercentage.toFixed(1)}%`;
+            statusBarItem.tooltip = `Context Usage: ${state.currentTokens.toLocaleString()}/${state.contextLimit.toLocaleString()} tokens`;
+        }
+    });
 
     // Start file watching if auto-sync is enabled
     if (vscode.workspace.getConfiguration('claude-config').get('autoSync')) {
@@ -673,6 +725,74 @@ function updateStatusBarWithUsage() {
     }
 }
 
+/**
+ * Show pruning recommendations dialog
+ */
+async function showPruningRecommendationsDialog(actions: any[]): Promise<void> {
+    if (actions.length === 0) {
+        vscode.window.showInformationMessage('✅ No pruning recommendations found. Your conversation is well-optimized!');
+        return;
+    }
+
+    const items = actions.map(action => ({
+        label: `$(${action.type === 'prune' ? 'trash' : action.type === 'deactivate' ? 'circle-slash' : 'git-merge'}) ${action.type.charAt(0).toUpperCase() + action.type.slice(1)} Branch`,
+        description: `${formatTokenCount(action.tokensSaved)} tokens saved`,
+        detail: `${action.reason} • Risk: ${action.riskLevel}`,
+        action: action
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+        title: 'Pruning Recommendations',
+        placeHolder: `Select action to optimize context usage (${actions.length} recommendations)`
+    });
+
+    if (selected) {
+        const conversationFile = forkTreeProvider.getCurrentConversationFile();
+        if (conversationFile) {
+            await branchManager.executePruningAction(selected.action, conversationFile);
+        }
+    }
+}
+
+/**
+ * Show branch backups dialog
+ */
+async function showBranchBackupsDialog(backups: any[]): Promise<void> {
+    if (backups.length === 0) {
+        vscode.window.showInformationMessage('No branch backups found.');
+        return;
+    }
+
+    const items = backups.map(backup => ({
+        label: `$(history) ${backup.timestamp.toLocaleDateString()} ${backup.timestamp.toLocaleTimeString()}`,
+        description: `${backup.branch.messages.length} messages`,
+        detail: `${backup.reason} • ${formatTokenCount(backup.branch.tokenCount)} tokens`,
+        backup: backup
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+        title: 'Branch Backups',
+        placeHolder: `Select backup to restore (${backups.length} available)`
+    });
+
+    if (selected) {
+        await branchManager.restoreBranchFromBackup(selected.backup);
+    }
+}
+
+/**
+ * Format token count for display
+ */
+function formatTokenCount(tokens: number): string {
+    if (tokens >= 1000000) {
+        return `${(tokens / 1000000).toFixed(1)}M`;
+    } else if (tokens >= 1000) {
+        return `${(tokens / 1000).toFixed(1)}K`;
+    } else {
+        return tokens.toString();
+    }
+}
+
 export function deactivate() {
     // Clean up file manager
     if (fileManager) {
@@ -687,6 +807,19 @@ export function deactivate() {
     // Clean up usage monitor
     if (usageMonitorTreeProvider) {
         usageMonitorTreeProvider.dispose();
+    }
+    
+    // Clean up context monitoring
+    if (contextMonitor) {
+        contextMonitor.dispose();
+    }
+    
+    if (contextDashboard) {
+        contextDashboard.dispose();
+    }
+    
+    if (branchManager) {
+        branchManager.dispose();
     }
     
     

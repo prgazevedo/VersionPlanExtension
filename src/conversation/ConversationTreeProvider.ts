@@ -23,7 +23,12 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     }
 
     refresh(): void {
+        console.log('[ConversationTreeProvider] Refresh called');
         this.loadConversations().then(() => {
+            console.log(`[ConversationTreeProvider] Loaded ${this.conversations.length} conversations, firing tree data change`);
+            this._onDidChangeTreeData.fire();
+        }).catch(error => {
+            console.error('[ConversationTreeProvider] Error during refresh:', error);
             this._onDidChangeTreeData.fire();
         });
     }
