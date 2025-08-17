@@ -109,12 +109,14 @@ export class UsageMonitorTreeProvider implements vscode.TreeDataProvider<UsageMo
                     undefined
                 ));
             } else {
+                // Check if we've received an error signal (null) vs still loading (undefined)
+                const isError = this.currentWindowData === null;
                 items.push(new UsageMonitorItem(
-                    '⚪ Token Window',
-                    'Loading usage data...',
+                    isError ? '❌ Token Window' : '⚪ Token Window',
+                    isError ? 'ccusage unavailable - package issues detected' : 'Loading usage data...',
                     vscode.TreeItemCollapsibleState.None,
                     'token-window',
-                    new vscode.ThemeIcon('loading~spin'),
+                    new vscode.ThemeIcon(isError ? 'error' : 'loading~spin'),
                     {
                         command: 'claude-config.refreshTokenWindow',
                         title: 'Refresh Token Window'

@@ -30,6 +30,9 @@ export class UsageMonitor {
             const dataPromise = ccusageService.getTodayUsage().then(todayData => {
                 this.loadingStartTime = null; // Reset on success
                 return this.generateHtmlWithCcusage(todayData);
+            }).catch(error => {
+                this.loadingStartTime = null; // Reset on error
+                throw error; // Re-throw to be caught by outer catch
             });
 
             // Race between showing loading state and getting actual data

@@ -231,10 +231,71 @@ export class TokenWindowMonitor {
             const windowData = await this.getCurrentWindow();
             if (windowData) {
                 this.onDataUpdatedEmitter.fire(windowData);
+            } else {
+                // Fire a null/error state so UI can show appropriate message
+                this.onDataUpdatedEmitter.fire(null as any);
             }
         } catch (error) {
             this.logger.error('Error fetching window data:', error);
+            // Fire a null/error state so UI can show appropriate message
+            this.onDataUpdatedEmitter.fire(null as any);
         }
+    }
+
+    private parseSimpleData(dayData: any): TokenWindowData {
+        const currentUsage = dayData?.totalTokens || 0;
+        const totalCost = dayData?.totalCost || 0;
+        
+        // Estimate limits based on typical Claude usage patterns
+        // Free tier: ~100K tokens, Pro: ~500K tokens per month
+        const estimatedLimit = totalCost > 0 ? 500000 : 100000; // Rough estimation
+        
+        const currentPercentage = estimatedLimit > 0 ? (currentUsage / estimatedLimit) * 100 : 0;
+        const projectedUsage = currentUsage; // For daily data, current = projected
+        const projectedPercentage = currentPercentage;
+
+        // Create date ranges (daily window)
+        const today = new Date();
+        const windowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const windowEnd = new Date(windowStart);
+        windowEnd.setDate(windowEnd.getDate() + 1);
+        
+        // Next reset is tomorrow
+        const resetTime = new Date(windowEnd);
+        
+        const status: 'ok' | 'warning' | 'critical' = 
+            currentPercentage > 90 ? 'critical' :
+            currentPercentage > 70 ? 'warning' : 'ok';
+
+        const timeElapsed = Date.now() - windowStart.getTime();
+        const timeRemaining = windowEnd.getTime() - Date.now();
+        const remainingMinutes = Math.max(0, Math.floor(timeRemaining / (1000 * 60)));
+
+        return {
+            currentUsage,
+            currentPercentage,
+            projectedUsage,
+            projectedPercentage,
+            limit: estimatedLimit,
+            windowStart,
+            windowEnd,
+            resetTime,
+            status,
+            projection: {
+                totalTokens: projectedUsage,
+                totalCost: totalCost,
+                remainingMinutes
+            },
+            burnRate: {
+                tokensPerMinute: timeElapsed > 0 ? currentUsage / (timeElapsed / (1000 * 60)) : 0,
+                tokensPerHour: timeElapsed > 0 ? currentUsage / (timeElapsed / (1000 * 60 * 60)) : 0,
+                costPerHour: timeElapsed > 0 ? totalCost / (timeElapsed / (1000 * 60 * 60)) : 0
+            },
+            windowId: dayData?.date || today.toISOString().split('T')[0],
+            isActive: true,
+            timeElapsed: timeElapsed,
+            timeRemaining: timeRemaining
+        };
     }
 
     private parseBlockData(block: any): TokenWindowData {

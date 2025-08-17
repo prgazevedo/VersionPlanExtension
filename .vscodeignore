@@ -9,7 +9,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.github/**
-**/node_modules/**
+# Include production dependencies for extension
+# **/node_modules/**
 **/test/**
 **/.git/**
 

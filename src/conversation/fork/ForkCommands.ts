@@ -45,6 +45,12 @@ export class ForkCommands {
             ),
             vscode.commands.registerCommand('claude-config.exportForkAnalysis', () => 
                 commands.exportForkAnalysis()
+            ),
+            vscode.commands.registerCommand('claude-config.resumeConversationInClaude', (sessionId?: string) => 
+                commands.resumeConversationInClaude(sessionId)
+            ),
+            vscode.commands.registerCommand('claude-config.selectConversationForForkAnalysis', () => 
+                commands.selectConversationForForkAnalysis()
             )
         ];
 
@@ -227,13 +233,110 @@ Pruning alternative branches could save ${this.formatTokenCount(alternativeBranc
     }
 
     /**
+     * Select a conversation from available conversations for fork analysis
+     */
+    async selectConversationForForkAnalysis(): Promise<void> {
+        const conversationManager = this.forkTreeProvider.getConversationManager();
+        if (!conversationManager) {
+            vscode.window.showErrorMessage('ConversationManager not initialized');
+            return;
+        }
+
+        try {
+            // Get available conversations
+            const conversations = await conversationManager.getAvailableConversations();
+            
+            if (conversations.length === 0) {
+                vscode.window.showInformationMessage('No conversations found');
+                return;
+            }
+
+            // Create quick pick items
+            const quickPickItems = conversations.map((conv: any) => ({
+                label: `${conv.projectName}`,
+                description: `${conv.messageCount} messages • ${conv.sessionId.substring(0, 8)}...`,
+                detail: conv.firstMessage ? `First: ${conv.firstMessage.substring(0, 80)}...` : undefined,
+                conversation: conv
+            }));
+
+            // Show quick pick
+            const selected = await vscode.window.showQuickPick(quickPickItems, {
+                placeHolder: 'Select a conversation for fork analysis',
+                matchOnDescription: true,
+                matchOnDetail: true
+            });
+
+            if (selected && (selected as any).conversation.filePath) {
+                await this.forkTreeProvider.loadConversationFile((selected as any).conversation.filePath);
+                vscode.window.showInformationMessage(`✅ Loaded conversation from ${(selected as any).conversation.projectName} for fork analysis`);
+            }
+        } catch (error) {
+            console.error('[ForkCommands] Error selecting conversation for fork analysis:', error);
+            vscode.window.showErrorMessage(`Failed to select conversation: ${error}`);
+        }
+    }
+
+    /**
+     * Resume a conversation in Claude Code
+     */
+    async resumeConversationInClaude(sessionId?: string): Promise<void> {
+        let targetSessionId = sessionId;
+        
+        // If no session ID provided, try to get it from current analysis
+        if (!targetSessionId) {
+            const analysis = this.forkTreeProvider.getCurrentAnalysis();
+            if (analysis?.tree.sessionId) {
+                targetSessionId = analysis.tree.sessionId;
+            } else {
+                vscode.window.showErrorMessage('No conversation session ID available');
+                return;
+            }
+        }
+
+        try {
+            // Get the correct working directory from the conversation data
+            let cwd = process.cwd(); // fallback
+            
+            // Try to get the project directory from the current analysis
+            const analysis = this.forkTreeProvider.getCurrentAnalysis();
+            if (analysis?.tree.allMessages && analysis.tree.allMessages.size > 0) {
+                // Get the first message to extract the cwd
+                const firstMessage = Array.from(analysis.tree.allMessages.values())[0];
+                if (firstMessage?.cwd) {
+                    cwd = firstMessage.cwd;
+                }
+            }
+            
+            // If we couldn't find cwd from conversation, fall back to workspace
+            if (!cwd || cwd === process.cwd()) {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                cwd = workspaceFolder?.uri.fsPath || process.cwd();
+            }
+            
+            // Create a new terminal and run Claude with resume command
+            const terminal = vscode.window.createTerminal({
+                name: `Claude Resume: ${targetSessionId.substring(0, 8)}...`,
+                cwd: cwd
+            });
+            
+            terminal.show();
+            terminal.sendText(`claude --resume ${targetSessionId}`);
+            
+            vscode.window.showInformationMessage(`🚀 Resuming conversation ${targetSessionId.substring(0, 8)}... in Claude Code`);
+            
+        } catch (error) {
+            console.error('Error resuming conversation in Claude:', error);
+            vscode.window.showErrorMessage(`Failed to resume conversation: ${error}`);
+        }
+    }
+
+    /**
      * Generate HTML for branch details
      */
     private getBranchDetailsHtml(branch: ConversationBranch): string {
         const tokenBreakdown = branch.messages.map(msg => TokenCalculator.getTokenBreakdown(msg));
         const totalInput = tokenBreakdown.reduce((sum, t) => sum + t.input, 0);
         const totalOutput = tokenBreakdown.reduce((sum, t) => sum + t.output, 0);
-        const totalCache = tokenBreakdown.reduce((sum, t) => sum + t.cacheCreation + t.cacheRead, 0);
 
         return `
         <!DOCTYPE html>

@@ -338,7 +338,31 @@ Example with configured base path `/DSM3/GPT_Projects/claude-config-manager/`:
 
 ## Recent Updates
 
-### v3.4.0 - WebDAV Sync Optimization & Resume Capability (In Development)
+### v3.5.0 - Claude Conversation Fork Manager & Enhanced Integration (Major Release)
+
+- **🆕 Claude Conversation Fork Manager**: Complete fork analysis and visualization system for Claude Code conversations
+  - **Real-time Fork Detection**: Automatically detects conversation forks as they happen with file watching
+  - **Branch Visualization**: Tree view showing conversation forks, branches, and token distribution
+  - **Token Analysis**: Detailed token counting for main paths, alternative branches, and abandoned branches
+  - **Context Window Monitoring**: Tracks context usage and warns when approaching limits
+  - **Resume Integration**: Click any conversation to resume directly in Claude Code from correct working directory
+
+- **🔧 Enhanced Conversation Details**: Fork count now displayed in conversation metadata alongside duration, tokens, and other details
+  - **Tab Title**: Conversation viewer now shows "CC:Conversation Details" for clear identification
+  - **Session ID Sync**: Fixed session ID mismatch between Fork Manager and Conversation Details panels
+  - **Fork Count Display**: Shows number of conversation forks in the metadata section
+
+- **⚡ ccusage Integration Fixes**: Resolved ccusage package issues for reliable usage tracking
+  - **Version Pinning**: Uses ccusage@15.9.7 (last working version) instead of broken @latest
+  - **Proper Error Handling**: Graceful fallback when ccusage packages have internal issues
+  - **Token Window Recovery**: Fixed stuck loading states in Usage Monitor with better error detection
+
+- **🚀 Real-time Synchronization**: Fork Manager and Conversation Details now stay synchronized
+  - **Event Coordination**: Opening a conversation automatically loads it in Fork Manager
+  - **Working Directory Detection**: Extracts correct project directory from conversation data for Claude CLI commands
+  - **Automatic Refresh**: File watching ensures fork analysis updates as conversations evolve
+
+### v3.4.0 - WebDAV Sync Optimization & Resume Capability (Completed)
 
 - **🚀 Smart Sync Logic**: Enhanced needsSync implementation with hash-based change detection to prevent unnecessary uploads
 - **📦 Batch Existence Checking**: Optimized PROPFIND operations to check multiple files efficiently, reducing server load

@@ -4,9 +4,12 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import { ConversationManager } from './ConversationManager';
 import { ConversationSummary, ConversationSession, ConversationMessage } from './types';
+import { ForkAnalyzer } from './fork/ForkAnalyzer';
 
 export class ConversationViewer {
     private panel: vscode.WebviewPanel | undefined;
+    private onConversationOpenedEmitter = new vscode.EventEmitter<string>();
+    public readonly onConversationOpened = this.onConversationOpenedEmitter.event;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -29,7 +32,7 @@ export class ConversationViewer {
 
             this.panel = vscode.window.createWebviewPanel(
                 'conversationViewer-' + Date.now(),
-                `💬 ${conversationSummary.projectName}`,
+                `CC:Conversation Details`,
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
@@ -39,6 +42,9 @@ export class ConversationViewer {
 
             // Set the webview content using conversation summary + messages
             this.panel.webview.html = this.getWebviewContent(conversationSummary, conversation);
+
+            // Notify that a conversation was opened (for Fork Manager coordination)
+            this.onConversationOpenedEmitter.fire(conversationSummary.filePath);
 
             // Handle messages from the webview
             this.panel.webview.onDidReceiveMessage(
@@ -346,6 +352,10 @@ export class ConversationViewer {
                 <div class="metadata-item short">
                     <span class="metadata-label">Messages/Tokens:</span>
                     <span class="metadata-value">${metadata.totalMessages}/${metadata.totalTokens.toLocaleString()}</span>
+                </div>
+                <div class="metadata-item short">
+                    <span class="metadata-label">Forks:</span>
+                    <span class="metadata-value">${metadata.forkCount}</span>
                 </div>
                 <div class="metadata-item short">
                     <span class="metadata-label">Started:</span>
@@ -885,7 +895,8 @@ export class ConversationViewer {
             cwd: 'Unknown',
             model: 'Unknown',
             totalTokens: 0,
-            totalMessages: messages.length
+            totalMessages: messages.length,
+            forkCount: 0
         };
 
         // Search through all messages for metadata
@@ -923,6 +934,16 @@ export class ConversationViewer {
                 metadata.model !== 'Unknown') {
                 // Continue to count tokens but don't need to check other metadata
             }
+        }
+
+        // Analyze forks in the conversation
+        try {
+            const forkAnalyzer = new ForkAnalyzer();
+            const analysis = forkAnalyzer.analyzeMessages(messages);
+            metadata.forkCount = analysis.forkCount;
+        } catch (error) {
+            console.warn('[ConversationViewer] Fork analysis failed:', error);
+            metadata.forkCount = 0;
         }
 
         return metadata;

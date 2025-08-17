@@ -99,18 +99,18 @@ export class CcusageService {
         const executionMethods: ExecutionMethod[] = [
             {
                 runner: 'bunx',
-                command: `bunx ccusage ${command}`,
+                command: `bunx ccusage@15.9.7 ${command}`,
                 errorHint: 'Bun not found. Install from https://bun.sh or the Bun VS Code extension.'
             },
             {
                 runner: 'npx',
-                command: `npx ccusage@latest ${command}`,
-                errorHint: 'npx is downloading ccusage. This may take a moment on first run.'
+                command: `npx ccusage@15.9.7 ${command}`,
+                errorHint: 'npx is downloading ccusage v15.9.7. This may take a moment on first run.'
             },
             {
                 runner: 'npm exec',
-                command: `npm exec --yes -- ccusage ${command}`,
-                errorHint: 'npm is downloading ccusage. This may take a moment on first run.'
+                command: `npm exec --yes -- ccusage@15.9.7 ${command}`,
+                errorHint: 'npm is downloading ccusage v15.9.7. This may take a moment on first run.'
             }
         ];
 
@@ -158,6 +158,12 @@ export class CcusageService {
                 // Parse ccusage-specific errors that we should handle
                 const errorMessage = error.stderr || error.message || 'Unknown error';
 
+                // Handle ccusage package issues (like missing modules)
+                if (errorMessage.includes('Cannot find module') || errorMessage.includes('MODULE_NOT_FOUND')) {
+                    this.logger.warn(`ccusage package has internal errors: ${errorMessage}`);
+                    continue; // Try next method, though they'll likely all fail
+                }
+
                 if (errorMessage.includes('No conversations found')) {
                     // This is expected for new users
                     return JSON.stringify({
@@ -189,6 +195,15 @@ export class CcusageService {
                 `1. Bun (recommended for speed): https://bun.sh\n` +
                 `2. Node.js (includes npm/npx): https://nodejs.org\n` +
                 `3. Bun VS Code Extension: Search for "Bun for Visual Studio Code" in Extensions`
+            );
+        }
+
+        // Handle ccusage package internal errors
+        if (errorMessage.includes('Cannot find module') || errorMessage.includes('MODULE_NOT_FOUND')) {
+            throw new Error(
+                `ccusage package is currently experiencing issues.\n\n` +
+                `This is a temporary problem with the ccusage package itself.\n` +
+                `Usage statistics are temporarily unavailable. Please try again later.`
             );
         }
         

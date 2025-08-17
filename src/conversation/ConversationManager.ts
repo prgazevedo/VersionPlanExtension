@@ -14,9 +14,89 @@ export class ConversationManager {
     protected summaryCache = SummaryCacheManager.getInstance();
 
     constructor(private context: vscode.ExtensionContext) {
+        console.log('[ConversationManager] 🚀 Constructor called');
         // Default Claude data path - can be overridden by configuration
         this.claudeDataPath = this.getDefaultClaudeDataPath();
+        console.log('[ConversationManager] 📁 Data path:', this.claudeDataPath);
         this.setupFileWatcher();
+        console.log('[ConversationManager] ✅ Constructor completed');
+    }
+
+    /**
+     * Initialize the ConversationManager by loading conversations into cache
+     * Returns Promise that resolves when cache is populated
+     */
+    async initialize(): Promise<void> {
+        console.log('[ConversationManager] 🔄 Initialize called - populating cache');
+        console.log(`[ConversationManager] 📁 Data path: ${this.claudeDataPath}`);
+        console.log(`[ConversationManager] 📦 Cache state before init: ${this.summaryCache.getAll().length} items`);
+        
+        const startTime = Date.now();
+        
+        try {
+            // Check if data path exists
+            const pathExists = await fs.pathExists(this.claudeDataPath);
+            console.log(`[ConversationManager] 📂 Data path exists: ${pathExists}`);
+            
+            if (!pathExists) {
+                console.log('[ConversationManager] ⚠️ Claude data path does not exist, creating empty cache');
+                return;
+            }
+            
+            // Force load conversations to populate cache
+            console.log('[ConversationManager] 🔍 Force loading conversations to populate cache...');
+            const conversations = await this.getAvailableConversations(false);
+            
+            const loadTime = Date.now() - startTime;
+            const cacheSize = this.summaryCache.getAll().length;
+            
+            console.log(`[ConversationManager] ✅ Initialize completed: ${conversations.length} conversations loaded in ${loadTime}ms`);
+            console.log(`[ConversationManager] 📦 Cache state after init: ${cacheSize} items`);
+            
+            if (conversations.length === 0) {
+                console.log('[ConversationManager] ⚠️ No conversations found - this may indicate missing data or permissions issue');
+            }
+            
+            if (cacheSize !== conversations.length) {
+                console.log(`[ConversationManager] ⚠️ Cache size mismatch: loaded ${conversations.length} but cache has ${cacheSize}`);
+            }
+            
+        } catch (error) {
+            const loadTime = Date.now() - startTime;
+            console.error(`[ConversationManager] ❌ Initialize failed after ${loadTime}ms:`, error);
+            console.error('[ConversationManager] 📋 Error details:', {
+                dataPath: this.claudeDataPath,
+                errorMessage: error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Check if the cache is populated with conversations
+     */
+    isCachePopulated(): boolean {
+        const cached = this.summaryCache.getAll();
+        const isPopulated = cached.length > 0;
+        console.log(`[ConversationManager] 📦 Cache populated check: ${isPopulated} (${cached.length} items)`);
+        
+        if (!isPopulated) {
+            console.log('[ConversationManager] 🔍 Cache empty - debugging info:');
+            console.log(`[ConversationManager] 📁 Data path configured: ${this.claudeDataPath}`);
+            console.log('[ConversationManager] 💡 Possible causes: no conversations exist, path misconfigured, or initialization failed');
+        } else {
+            console.log('[ConversationManager] ✅ Cache has data, tree providers should display conversations');
+            // Log first few conversations for debugging
+            const firstFew = cached.slice(0, 3).map(c => ({
+                project: c.projectName,
+                messages: c.messageCount,
+                startTime: c.startTime
+            }));
+            console.log('[ConversationManager] 📋 Sample conversations in cache:', firstFew);
+        }
+        
+        return isPopulated;
     }
 
     /**
@@ -71,25 +151,28 @@ export class ConversationManager {
      * Returns cached summaries immediately if available, otherwise loads from files
      */
     async getAvailableConversations(useCache: boolean = true): Promise<ConversationSummary[]> {
+        console.log(`[ConversationManager] 🔍 getAvailableConversations called, useCache: ${useCache}`);
         try {
             // Try to return cached summaries first for fast loading
             if (useCache) {
                 const cached = this.summaryCache.getAll();
+                console.log(`[ConversationManager] 📦 Cache check: ${cached.length} items found`);
                 if (cached.length > 0) {
-                    console.log(`[ConversationManager] 📦 Returning ${cached.length} cached summaries`);
+                    console.log(`[ConversationManager] ✅ Returning ${cached.length} cached summaries`);
                     return cached.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
                 }
+                console.log('[ConversationManager] 📦 Cache empty, loading from disk');
             }
 
             const conversations: ConversationSummary[] = [];
             
             if (!await fs.pathExists(this.claudeDataPath)) {
-                console.log('Claude data path does not exist:', this.claudeDataPath);
+                console.log('[ConversationManager] ❌ Claude data path does not exist:', this.claudeDataPath);
                 return conversations;
             }
 
             const projectDirs = await fs.readdir(this.claudeDataPath);
-            console.log('Found project directories:', projectDirs);
+            console.log(`[ConversationManager] 📂 Found ${projectDirs.length} project directories:`, projectDirs);
             
             for (const projectDir of projectDirs) {
                 const projectPath = path.join(this.claudeDataPath, projectDir);
@@ -156,7 +239,7 @@ export class ConversationManager {
 
     private async getConversationSummary(filePath: string, projectDir: string): Promise<ConversationSummary | null> {
         try {
-            const sessionId = path.basename(filePath, '.jsonl');
+            let sessionId = path.basename(filePath, '.jsonl');
             const projectName = this.extractProjectName(projectDir);
             
             // Read first and last few lines to get summary info
@@ -173,6 +256,11 @@ export class ConversationManager {
             try {
                 firstMessage = JSON.parse(lines[0]) as ConversationMessage;
                 lastMessage = lines.length > 1 ? JSON.parse(lines[lines.length - 1]) as ConversationMessage : firstMessage;
+                
+                // Use actual session ID from message content, not filename
+                if (firstMessage.sessionId) {
+                    sessionId = firstMessage.sessionId;
+                }
             } catch (parseError) {
                 console.error(`Failed to parse message JSON in ${filePath}:`, parseError);
                 return null;
@@ -357,8 +445,11 @@ export class ConversationManager {
             const firstMessage = messages[0];
             const lastMessage = messages[messages.length - 1];
 
-            // Extract session ID from filename
-            const sessionId = path.basename(filePath, '.jsonl');
+            // Extract session ID from message content, fallback to filename
+            let sessionId = path.basename(filePath, '.jsonl');
+            if (firstMessage.sessionId) {
+                sessionId = firstMessage.sessionId;
+            }
             
             // Find actual start and end times (chronologically)
             const validMessages = messages.filter(m => m.timestamp && !isNaN(new Date(m.timestamp).getTime()));

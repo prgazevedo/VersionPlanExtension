@@ -14,21 +14,27 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     private isLoading = false;
 
     constructor(private conversationManager: ConversationManager) {
-        this.refresh();
+        console.log('[ConversationTreeProvider] 🚀 Constructor called');
+        // Don't call refresh() immediately - extension.ts ensures data is loaded before this constructor
+        // Just load from cache since ConversationManager has already loaded the data
+        this.conversations = this.summaryCache.getAll();
+        console.log(`[ConversationTreeProvider] 📦 Constructor - loaded ${this.conversations.length} conversations from cache`);
         
         // Listen for conversation changes and auto-refresh
         this.conversationManager.onConversationsChanged(() => {
+            console.log('[ConversationTreeProvider] 🔄 ConversationManager change event received, calling refresh');
             this.refresh();
         });
+        console.log('[ConversationTreeProvider] ✅ Constructor completed, event listener registered');
     }
 
     refresh(): void {
-        console.log('[ConversationTreeProvider] Refresh called');
+        console.log('[ConversationTreeProvider] 🔄 Refresh called');
         this.loadConversations().then(() => {
-            console.log(`[ConversationTreeProvider] Loaded ${this.conversations.length} conversations, firing tree data change`);
+            console.log(`[ConversationTreeProvider] ✅ Loaded ${this.conversations.length} conversations, firing tree data change`);
             this._onDidChangeTreeData.fire();
         }).catch(error => {
-            console.error('[ConversationTreeProvider] Error during refresh:', error);
+            console.error('[ConversationTreeProvider] ❌ Error during refresh:', error);
             this._onDidChangeTreeData.fire();
         });
     }
@@ -58,20 +64,25 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     }
 
     private async loadConversations(): Promise<void> {
+        console.log('[ConversationTreeProvider] 📥 loadConversations started');
         try {
             this.isLoading = true;
             // Try cache first for immediate display
             const cached = this.summaryCache.getAll();
+            console.log(`[ConversationTreeProvider] 📦 Cache check: ${cached.length} items`);
             if (cached.length > 0) {
                 this.conversations = cached;
+                console.log('[ConversationTreeProvider] 🔄 Showing cached data immediately');
                 this._onDidChangeTreeData.fire(); // Show cached data immediately
             }
             
             // Load fresh data in background
+            console.log('[ConversationTreeProvider] 📡 Calling conversationManager.getAvailableConversations()');
             this.conversations = await this.conversationManager.getAvailableConversations();
+            console.log(`[ConversationTreeProvider] ✅ Fresh data loaded: ${this.conversations.length} conversations`);
             this.isLoading = false;
         } catch (error) {
-            console.error('Error loading conversations for tree view:', error);
+            console.error('[ConversationTreeProvider] ❌ Error loading conversations for tree view:', error);
             this.conversations = [];
             this.isLoading = false;
         }
@@ -128,13 +139,16 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
             return element.conversations.map(conv => {
                 const label = this.formatConversationLabel(conv);
                 const description = this.formatConversationDescription(conv);
-                return new ConversationItem(
+                const item = new ConversationItem(
                     label,
                     description,
                     vscode.TreeItemCollapsibleState.None,
                     'conversation',
                     conv
                 );
+                // Add context menu support for fork analysis
+                item.contextValue = 'conversation';
+                return item;
             });
         }
 

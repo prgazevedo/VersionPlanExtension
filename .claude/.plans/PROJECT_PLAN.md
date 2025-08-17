@@ -19,7 +19,13 @@ Comprehensive VSCode extension for Claude Code workflows providing CLAUDE.md con
 - ✅ **COMPLETED**: v3.3.0 - WebDAV Cloud Sync Implementation & Architecture Simplification
 - ✅ **COMPLETED**: v3.3.1 - Legacy TokenTracker removal and ccusage CLI integration
 - ✅ **COMPLETED**: v3.3.2 - Codebase Maintenance & Stability Release  
-- ✅ **COMPLETED**: v3.5.0 - Conversation Fork Manager with Real-time Context Monitoring
+- ✅ **COMPLETED**: v3.5.0 - Claude Conversation Fork Manager & Enhanced Integration (Phase 3)
+  - ✅ **Real-time Fork Detection**: File watching with automatic fork analysis updates
+  - ✅ **Branch Visualization**: Complete tree view with token distribution analysis  
+  - ✅ **Context Window Monitoring**: Token usage tracking with warning thresholds
+  - ✅ **Resume Integration**: Direct Claude Code resume from correct working directory
+  - ✅ **Enhanced Conversation Details**: Fork count display and session ID synchronization
+  - ✅ **ccusage Integration**: Fixed package issues and restored reliable usage tracking
 
 ## Key Features Implemented
 

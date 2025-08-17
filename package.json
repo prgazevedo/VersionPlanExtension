@@ -2,7 +2,7 @@
   "name": "claude-config-manager",
   "displayName": "Claude Config Manager",
   "description": "Comprehensive Claude Code workflow manager: CLAUDE.md configuration sync, conversation history browser, PROJECT_PLAN integration with Git, ccusage-powered usage tracking, and WebDAV cloud synchronization",
-  "version": "3.5.2",
+  "version": "3.5.5",
   "publisher": "azevedo-software",
   "author": "Pedro Azevedo",
   "license": "MIT",
@@ -200,6 +200,66 @@
         "title": "Show Branch Backups",
         "category": "Claude Config",
         "icon": "$(history)"
+      },
+      {
+        "command": "claude-config.loadConversationInForkManager",
+        "title": "Load in Fork Manager",
+        "category": "Claude Config",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "claude-config.resumeConversationInClaude",
+        "title": "Resume in Claude Code",
+        "category": "Claude Config",
+        "icon": "$(play)"
+      },
+      {
+        "command": "claude-config.viewBranchDetails",
+        "title": "View Branch Details",
+        "category": "Claude Config",
+        "icon": "$(info)"
+      },
+      {
+        "command": "claude-config.viewFullBranch",
+        "title": "View Full Branch",
+        "category": "Claude Config",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "claude-config.pruneBranch",
+        "title": "Prune Branch",
+        "category": "Claude Config",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claude-config.toggleBranchActive",
+        "title": "Toggle Branch Active",
+        "category": "Claude Config",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "claude-config.analyzeForkImpact",
+        "title": "Analyze Fork Impact",
+        "category": "Claude Config",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "claude-config.loadConversationForForkAnalysis",
+        "title": "Load Conversation for Fork Analysis",
+        "category": "Claude Config",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "claude-config.refreshForkTree",
+        "title": "Refresh Fork Tree",
+        "category": "Claude Config",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claude-config.exportForkAnalysis",
+        "title": "Export Fork Analysis",
+        "category": "Claude Config",
+        "icon": "$(export)"
       }
     ],
     "viewsContainers": {
@@ -222,12 +282,12 @@
           "name": "Conversations"
         },
         {
-          "id": "claude-usage-monitor",
-          "name": "CCUsage Monitor"
-        },
-        {
           "id": "claude-fork-manager",
           "name": "Fork Manager"
+        },
+        {
+          "id": "claude-usage-monitor",
+          "name": "CCUsage Monitor"
         }
       ]
     },
@@ -402,6 +462,45 @@
           "description": "Minimum message count to include full conversation in smart sync"
         }
       }
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "claude-config.loadConversationInForkManager",
+          "when": "view == claude-conversations && viewItem == conversation",
+          "group": "analysis"
+        },
+        {
+          "command": "claude-config.resumeConversationInClaude",
+          "when": "view == claude-fork-manager && viewItem == conversation",
+          "group": "navigation"
+        },
+        {
+          "command": "claude-config.viewBranchDetails",
+          "when": "view == claude-fork-manager && viewItem == branch",
+          "group": "details"
+        },
+        {
+          "command": "claude-config.viewFullBranch",
+          "when": "view == claude-fork-manager && viewItem == branch",
+          "group": "details"
+        },
+        {
+          "command": "claude-config.pruneBranch",
+          "when": "view == claude-fork-manager && viewItem == branch",
+          "group": "management"
+        },
+        {
+          "command": "claude-config.toggleBranchActive",
+          "when": "view == claude-fork-manager && viewItem == branch",
+          "group": "management"
+        },
+        {
+          "command": "claude-config.analyzeForkImpact",
+          "when": "view == claude-fork-manager && viewItem == fork",
+          "group": "analysis"
+        }
+      ]
     }
   },
   "scripts": {

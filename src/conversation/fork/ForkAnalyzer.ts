@@ -28,6 +28,15 @@ export class ForkAnalyzer {
         // Update tree with identified forks and branches
         tree.forks = forks.map(fork => this.buildForkWithBranches(fork, branches, tree));
         
+        // Calculate total tokens for the tree
+        // Include all messages, not just those in forks
+        const allMessages = Array.from(tree.allMessages.values());
+        tree.totalTokens = this.calculateBranchTokens(allMessages, { 
+            includeToolUse: true, 
+            includeCachedTokens: true, 
+            estimateIfMissing: true 
+        });
+        
         // Calculate token distribution
         const tokenDistribution = this.calculateTokenDistribution(tree);
         

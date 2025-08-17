@@ -33,6 +33,8 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
     private analyzer: ForkAnalyzer;
     private currentAnalysis: ForkAnalysisResult | null = null;
     private currentConversationFile: string | null = null;
+    private conversationManager: any = null;
+    private fileWatcher: vscode.FileSystemWatcher | undefined;
 
     constructor() {
         this.analyzer = new ForkAnalyzer();
@@ -42,6 +44,8 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
      * Setup with ConversationManager and auto-load recent conversation
      */
     async setupWithConversationManager(conversationManager: any): Promise<void> {
+        this.conversationManager = conversationManager;
+        
         // Listen to conversation changes
         conversationManager.onConversationsChanged(() => {
             this.refresh();
@@ -61,30 +65,42 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
                 path.join(os.homedir(), '.claude', 'projects');
             
             if (await fs.pathExists(conversationPath)) {
-                const files = await fs.readdir(conversationPath);
-                const jsonlFiles = files.filter((f: string) => f.endsWith('.jsonl'));
+                // Look for JSONL files in project subdirectories
+                const projectDirs = await fs.readdir(conversationPath);
+                const allJsonlFiles: Array<{ name: string, path: string, mtime: Date }> = [];
                 
-                if (jsonlFiles.length > 0) {
-                    // Get the most recently modified file
-                    const mostRecent = jsonlFiles
-                        .map((f: string) => ({ 
-                            name: f, 
-                            path: path.join(conversationPath, f) 
-                        }))
-                        .sort((a, b) => {
-                            try {
-                                const statA = fs.statSync(a.path);
-                                const statB = fs.statSync(b.path);
-                                return statB.mtime.getTime() - statA.mtime.getTime();
-                            } catch {
-                                return 0;
-                            }
-                        })[0];
+                for (const projectDir of projectDirs) {
+                    const projectPath = path.join(conversationPath, projectDir);
+                    const stat = await fs.stat(projectPath);
                     
-                    if (mostRecent) {
-                        console.log(`[ForkTreeProvider] Auto-loading recent conversation: ${mostRecent.name}`);
-                        await this.loadConversationFile(mostRecent.path);
+                    if (stat.isDirectory()) {
+                        const files = await fs.readdir(projectPath);
+                        const jsonlFiles = files.filter((f: string) => f.endsWith('.jsonl'));
+                        
+                        for (const file of jsonlFiles) {
+                            const filePath = path.join(projectPath, file);
+                            try {
+                                const fileStat = await fs.stat(filePath);
+                                allJsonlFiles.push({
+                                    name: file,
+                                    path: filePath,
+                                    mtime: fileStat.mtime
+                                });
+                            } catch (error) {
+                                console.warn(`[ForkTreeProvider] Could not stat file ${filePath}:`, error);
+                            }
+                        }
                     }
+                }
+                
+                if (allJsonlFiles.length > 0) {
+                    // Get the most recently modified file
+                    const mostRecent = allJsonlFiles.sort((a, b) => b.mtime.getTime() - a.mtime.getTime())[0];
+                    
+                    console.log(`[ForkTreeProvider] Auto-loading recent conversation: ${mostRecent.name} from ${mostRecent.path}`);
+                    await this.loadConversationFile(mostRecent.path);
+                } else {
+                    console.log('[ForkTreeProvider] No conversation files found to auto-load');
                 }
             }
         } catch (error) {
@@ -105,11 +121,48 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
      */
     async loadConversationFile(filePath: string): Promise<void> {
         try {
+            console.log(`[ForkTreeProvider] Loading conversation file: ${filePath}`);
+            
+            // Clean up previous file watcher
+            if (this.fileWatcher) {
+                this.fileWatcher.dispose();
+            }
+            
             this.currentConversationFile = filePath;
             this.currentAnalysis = await this.analyzer.analyzeConversationFile(filePath);
+            console.log(`[ForkTreeProvider] Successfully analyzed conversation with ${this.currentAnalysis.forkCount} forks and ${this.currentAnalysis.branchCount} branches`);
+            
+            // Set up file watcher for real-time updates
+            this.setupFileWatcher(filePath);
+            
             this.refresh();
         } catch (error) {
             console.error('[ForkTreeProvider] Error loading conversation:', error);
+            vscode.window.showErrorMessage(`Failed to load conversation: ${error}`);
+        }
+    }
+
+    /**
+     * Load conversation by session ID from ConversationManager
+     */
+    async loadConversationBySessionId(sessionId: string): Promise<void> {
+        if (!this.conversationManager) {
+            vscode.window.showErrorMessage('ConversationManager not initialized');
+            return;
+        }
+
+        try {
+            const conversations = await this.conversationManager.getAvailableConversations();
+            const conversation = conversations.find((c: any) => c.sessionId === sessionId);
+            
+            if (conversation && conversation.filePath) {
+                await this.loadConversationFile(conversation.filePath);
+                vscode.window.showInformationMessage(`Loaded conversation for fork analysis: ${conversation.projectName}`);
+            } else {
+                vscode.window.showErrorMessage(`Conversation not found: ${sessionId}`);
+            }
+        } catch (error) {
+            console.error('[ForkTreeProvider] Error loading conversation by session ID:', error);
             vscode.window.showErrorMessage(`Failed to load conversation: ${error}`);
         }
     }
@@ -126,7 +179,12 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
      */
     async getChildren(element?: ForkTreeItem): Promise<ForkTreeItem[]> {
         if (!this.currentAnalysis) {
-            return [this.createNoDataItem()];
+            if (!element) {
+                return [this.createNoDataItem()];
+            } else if (element.contextValue === 'no-data') {
+                return this.createLoadingGuidanceItems();
+            }
+            return [];
         }
 
         if (!element) {
@@ -164,12 +222,32 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
             `Conversation: ${analysis.tree.sessionId.substring(0, 8)}...`,
             vscode.TreeItemCollapsibleState.Expanded,
             'conversation',
-            `Session: ${analysis.tree.sessionId}\nMessages: ${analysis.tree.allMessages.size}\nMax Depth: ${analysis.tree.maxDepth}`,
-            undefined,
+            `Session: ${analysis.tree.sessionId}\nMessages: ${analysis.tree.allMessages.size}\nMax Depth: ${analysis.tree.maxDepth}\n\nClick to resume in Claude Code`,
+            {
+                command: 'claude-config.resumeConversationInClaude',
+                title: 'Resume in Claude Code',
+                arguments: [analysis.tree.sessionId]
+            },
             new vscode.ThemeIcon('comment-discussion'),
             `${analysis.tree.allMessages.size} messages`
         );
         items.push(conversationItem);
+
+        // Add option to load a different conversation
+        const loadDifferentItem = new ForkTreeItem(
+            'Load Different Conversation',
+            vscode.TreeItemCollapsibleState.None,
+            'load-different',
+            'Browse and select a different conversation for fork analysis',
+            {
+                command: 'claude-config.selectConversationForForkAnalysis',
+                title: 'Select Conversation for Analysis',
+                arguments: []
+            },
+            new vscode.ThemeIcon('folder-opened'),
+            'Switch conversation'
+        );
+        items.push(loadDifferentItem);
 
         return items;
     }
@@ -243,7 +321,6 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
         if (!fork) return [];
 
         return fork.branches.map((branch, index) => {
-            const tokenUsage = this.getTokenUsageLevel(branch.tokenCount);
             const icon = this.getBranchIcon(branch);
             const statusIcon = branch.isMainPath ? '🔗' : branch.isActive ? '🔀' : '💤';
             
@@ -383,17 +460,47 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
     private createNoDataItem(): ForkTreeItem {
         return new ForkTreeItem(
             'No conversation loaded',
-            vscode.TreeItemCollapsibleState.None,
+            vscode.TreeItemCollapsibleState.Expanded,
             'no-data',
-            'Select a conversation to analyze its fork structure',
-            {
-                command: 'claude-config.openConversations',
-                title: 'Browse Conversations',
-                arguments: []
-            },
-            new vscode.ThemeIcon('folder-opened'),
-            'Click to browse conversations'
+            'Select a conversation to analyze its fork structure and token usage',
+            undefined,
+            new vscode.ThemeIcon('info'),
+            'Load conversation for analysis'
         );
+    }
+
+    /**
+     * Create loading guidance items
+     */
+    private createLoadingGuidanceItems(): ForkTreeItem[] {
+        return [
+            new ForkTreeItem(
+                'Load Conversation',
+                vscode.TreeItemCollapsibleState.None,
+                'load-conversation',
+                'Browse conversations and load one for fork analysis',
+                {
+                    command: 'claude-config.selectConversationForForkAnalysis',
+                    title: 'Select Conversation for Analysis',
+                    arguments: []
+                },
+                new vscode.ThemeIcon('search'),
+                'Browse available conversations'
+            ),
+            new ForkTreeItem(
+                'Load from File',
+                vscode.TreeItemCollapsibleState.None,
+                'load-file',
+                'Load a specific conversation file for analysis',
+                {
+                    command: 'claude-config.loadConversationForForkAnalysis',
+                    title: 'Load Conversation File',
+                    arguments: []
+                },
+                new vscode.ThemeIcon('file'),
+                'Select JSONL file'
+            )
+        ];
     }
 
     /**
@@ -475,5 +582,56 @@ export class ForkTreeProvider implements vscode.TreeDataProvider<ForkTreeItem> {
      */
     getCurrentConversationFile(): string | null {
         return this.currentConversationFile;
+    }
+
+    /**
+     * Get conversation manager instance
+     */
+    getConversationManager(): any {
+        return this.conversationManager;
+    }
+
+    /**
+     * Set up file watcher for real-time conversation updates
+     */
+    private setupFileWatcher(filePath: string): void {
+        try {
+            this.fileWatcher = vscode.workspace.createFileSystemWatcher(
+                new vscode.RelativePattern(vscode.Uri.file(path.dirname(filePath)), path.basename(filePath))
+            );
+
+            // Listen for file changes
+            this.fileWatcher.onDidChange(async () => {
+                console.log(`[ForkTreeProvider] Conversation file changed: ${filePath}`);
+                try {
+                    // Re-analyze the conversation
+                    this.currentAnalysis = await this.analyzer.analyzeConversationFile(filePath);
+                    console.log(`[ForkTreeProvider] Re-analyzed conversation: ${this.currentAnalysis.forkCount} forks, ${this.currentAnalysis.branchCount} branches`);
+                    this.refresh();
+                } catch (error) {
+                    console.warn(`[ForkTreeProvider] Failed to re-analyze conversation: ${error}`);
+                }
+            });
+
+            // Clean up watcher when file is deleted
+            this.fileWatcher.onDidDelete(() => {
+                console.log(`[ForkTreeProvider] Conversation file deleted: ${filePath}`);
+                this.currentAnalysis = null;
+                this.currentConversationFile = null;
+                this.refresh();
+            });
+
+        } catch (error) {
+            console.warn(`[ForkTreeProvider] Failed to set up file watcher: ${error}`);
+        }
+    }
+
+    /**
+     * Dispose resources when the provider is disposed
+     */
+    dispose(): void {
+        if (this.fileWatcher) {
+            this.fileWatcher.dispose();
+        }
     }
 }

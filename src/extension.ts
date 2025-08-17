@@ -380,6 +380,10 @@ Current priorities and planned improvements.
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+    // Track extension activation time for debugging
+    const extensionStartTime = Date.now();
+    console.log('[Extension] 🚀 Extension activation started');
+    
     // Create output channel for debugging
     outputChannel = vscode.window.createOutputChannel('Claude Config Manager');
     outputChannel.appendLine('Claude Config Manager activated');
@@ -414,8 +418,35 @@ export async function activate(context: vscode.ExtensionContext) {
     fileManager = new ClaudeFileManager(context, repositoryManager);
     conversationManager = new ConversationManager(context);
     
-    // Allow ConversationManager to initialize its file watchers
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // PROPER FIX: Initialize ConversationManager and wait for cache to be populated
+    console.log('[Extension] 🔄 Initializing ConversationManager with proper async coordination...');
+    console.log('[Extension] 📊 Extension initialization phase: ConversationManager.initialize()');
+    
+    const initStartTime = Date.now();
+    try {
+        await conversationManager.initialize();
+        const initTime = Date.now() - initStartTime;
+        console.log(`[Extension] ✅ ConversationManager initialization completed in ${initTime}ms`);
+    } catch (error) {
+        const initTime = Date.now() - initStartTime;
+        console.error(`[Extension] ❌ ConversationManager initialization failed after ${initTime}ms:`, error);
+        console.error('[Extension] 📋 This may cause side panels to show welcome screens instead of data');
+        // Continue with initialization even if ConversationManager fails
+    }
+    
+    // Verify cache is populated before proceeding
+    console.log('[Extension] 🔍 Verifying cache population before tree provider initialization...');
+    const cachePopulated = conversationManager.isCachePopulated();
+    
+    if (!cachePopulated) {
+        console.log('[Extension] ⚠️ Cache still empty after initialization - side panels may show welcome screens');
+        console.log('[Extension] 💡 Debug: Check ConversationManager logs above for data loading issues');
+        console.log('[Extension] 💡 Debug: Verify Claude conversation data exists in configured path');
+    } else {
+        console.log('[Extension] ✅ Cache confirmed populated, tree providers should display conversation data');
+    }
+    
+    console.log('[Extension] 📊 Extension initialization phase: Creating tree providers...');
     
     conversationTreeProvider = new ConversationTreeProvider(conversationManager);
     conversationViewer = new ConversationViewer(context, conversationManager);
@@ -433,17 +464,37 @@ export async function activate(context: vscode.ExtensionContext) {
     contextMonitor.setupWithConversationManager(conversationManager);
     await forkTreeProvider.setupWithConversationManager(conversationManager);
     
+    // Coordinate Fork Manager with Conversation Viewer to show same conversation
+    conversationViewer.onConversationOpened(async (filePath: string) => {
+        console.log(`[Extension] Conversation opened in viewer: ${filePath}`);
+        await forkTreeProvider.loadConversationFile(filePath);
+    });
+    
     // Create tree data providers and register tree views
     const treeDataProvider = new ClaudeTreeDataProvider();
     
-    // Refresh tree providers - ensure all are refreshed after setup
-    setTimeout(() => {
-        console.log('[Extension] Refreshing all tree providers after initialization');
+    // Tree providers are now properly initialized with data
+    console.log('[Extension] 📊 Extension initialization phase: Refreshing tree providers...');
+    console.log('[Extension] 🔄 Triggering refresh of all tree providers after proper initialization');
+    
+    try {
+        console.log('[Extension] 🔄 Refreshing usageMonitorTreeProvider...');
         usageMonitorTreeProvider.refresh();
+        
+        console.log('[Extension] 🔄 Refreshing conversationTreeProvider...');
         conversationTreeProvider.refresh();
+        
+        console.log('[Extension] 🔄 Refreshing forkTreeProvider...');
         forkTreeProvider.refresh();
+        
+        console.log('[Extension] 🔄 Refreshing treeDataProvider...');
         treeDataProvider.refresh();
-    }, 500);
+        
+        console.log('[Extension] ✅ All tree providers refreshed successfully');
+    } catch (error) {
+        console.error('[Extension] ❌ Error during tree provider refresh:', error);
+        console.error('[Extension] 📋 This may cause some side panels to malfunction');
+    }
     vscode.window.createTreeView('claude-config', {
         treeDataProvider: treeDataProvider,
         showCollapseAll: false
@@ -619,6 +670,13 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('claude-config.showBranchBackups', async () => {
             const backups = await branchManager.getAvailableBackups();
             await showBranchBackupsDialog(backups);
+        }),
+        vscode.commands.registerCommand('claude-config.loadConversationInForkManager', async (conversationSummary) => {
+            if (conversationSummary && conversationSummary.sessionId) {
+                await forkTreeProvider.loadConversationBySessionId(conversationSummary.sessionId);
+            } else {
+                vscode.window.showErrorMessage('No conversation selected for fork analysis');
+            }
         })
     ];
 
@@ -648,6 +706,18 @@ export async function activate(context: vscode.ExtensionContext) {
     fileWatcher.onDidDelete(() => treeDataProvider.refresh());
     fileWatcher.onDidChange(() => treeDataProvider.refresh());
     context.subscriptions.push(fileWatcher);
+
+    // ✅ EXTENSION ACTIVATION COMPLETE - DEBUG SUMMARY
+    const activationEndTime = Date.now();
+    const totalActivationTime = activationEndTime - extensionStartTime;
+    console.log('[Extension] 🎉 Extension activation completed successfully!');
+    console.log(`[Extension] ⏱️ Total activation time: ${totalActivationTime}ms`);
+    console.log('[Extension] 📊 Activation Summary:');
+    console.log(`[Extension] • ConversationManager cache populated: ${conversationManager.isCachePopulated()}`);
+    console.log(`[Extension] • Tree providers created: ✅`);
+    console.log(`[Extension] • File watchers active: ✅`);
+    console.log(`[Extension] • Commands registered: ✅`);
+    console.log('[Extension] 💡 If side panels show welcome screens instead of data, check ConversationManager logs above');
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(event => {
