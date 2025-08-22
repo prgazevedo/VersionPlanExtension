@@ -263,18 +263,57 @@ export class UsageMonitor {
                 <div class="unavailable-actions">
                     <button onclick="enableCcusage()">Enable ccusage</button>
                     <button onclick="testCcusage()">Test Integration</button>
+                    <button onclick="manualRefresh()">Refresh Now</button>
+                </div>
+                
+                <div class="auto-refresh-notice">
+                    <small>Auto-refreshing every 5 seconds...</small>
                 </div>
             </div>
         </div>
         
         ${this.getStyles()}
+        <style>
+            .auto-refresh-notice {
+                text-align: center;
+                margin-top: 10px;
+                color: var(--vscode-descriptionForeground);
+                font-size: 12px;
+                font-style: italic;
+            }
+        </style>
         <script>
+        const vscode = acquireVsCodeApi ? acquireVsCodeApi() : { postMessage: () => {} };
+        
         function enableCcusage() {
             vscode.postMessage({ command: 'enableCcusage' });
         }
+        
         function testCcusage() {
             vscode.postMessage({ command: 'testCcusage' });
         }
+        
+        function manualRefresh() {
+            vscode.postMessage({ command: 'refreshStats' });
+        }
+        
+        // Auto-refresh every 5 seconds when ccusage is unavailable
+        let autoRefreshInterval = setInterval(() => {
+            vscode.postMessage({ command: 'getLatestUsage' });
+        }, 5000);
+        
+        // Listen for messages to stop auto-refresh if ccusage becomes available
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.command === 'updateUsage' && !message.data.error) {
+                // ccusage is now available, stop auto-refresh and reload
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                vscode.postMessage({ command: 'refreshStats' });
+            }
+        });
         </script>`;
     }
 

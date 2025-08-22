@@ -24,11 +24,66 @@ export async function viewUsageStatsCommand(): Promise<void> {
 
     panel.webview.html = await generateUsageStatsHtml();
     
+    // Auto-refresh timer for retrying ccusage when unavailable
+    let refreshInterval: NodeJS.Timeout | undefined;
+    
+    // Start auto-refresh if ccusage is unavailable
+    const startAutoRefresh = () => {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+        
+        // Try to refresh every 5 seconds if ccusage is unavailable
+        refreshInterval = setInterval(async () => {
+            try {
+                const ccusageService = CcusageService.getInstance();
+                await ccusageService.getTodayUsage();
+                // If successful, stop auto-refresh and update the panel
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = undefined;
+                }
+                panel.webview.html = await generateUsageStatsHtml();
+            } catch (error) {
+                // Still unavailable, keep trying
+            }
+        }, 5000);
+    };
+    
+    // Check if we need to start auto-refresh
+    try {
+        const ccusageService = CcusageService.getInstance();
+        await ccusageService.getTodayUsage();
+    } catch (error) {
+        // ccusage unavailable, start auto-refresh
+        startAutoRefresh();
+    }
+    
+    // Clean up interval when panel is disposed
+    panel.onDidDispose(() => {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+    });
+    
     // Handle messages from webview
     panel.webview.onDidReceiveMessage(async (message) => {
         switch (message.command) {
             case 'refreshStats':
                 panel.webview.html = await generateUsageStatsHtml();
+                // Check if we need to restart auto-refresh
+                try {
+                    const ccusageService = CcusageService.getInstance();
+                    await ccusageService.getTodayUsage();
+                    // Stop auto-refresh if running
+                    if (refreshInterval) {
+                        clearInterval(refreshInterval);
+                        refreshInterval = undefined;
+                    }
+                } catch (error) {
+                    // Restart auto-refresh
+                    startAutoRefresh();
+                }
                 break;
             case 'loadTabData':
                 try {

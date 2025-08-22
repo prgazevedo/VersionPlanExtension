@@ -338,6 +338,13 @@ Example with configured base path `/DSM3/GPT_Projects/claude-config-manager/`:
 
 ## Recent Updates
 
+### v3.5.6 - ccusage Auto-Refresh & Reliability Update
+
+- **🔧 Fixed ccusage Integration**: Resolved "unavailable" state in Usage Monitor panel with automatic recovery
+- **🔄 Auto-Refresh Mechanism**: Added 5-second auto-refresh when ccusage is temporarily unavailable
+- **📊 Improved UX**: Manual refresh button and visual feedback for better user experience
+- **⚡ Reliability Enhancement**: Panel now automatically detects when ccusage becomes available and updates accordingly
+
 ### v3.5.0 - Claude Conversation Fork Manager & Enhanced Integration (Major Release)
 
 - **🆕 Claude Conversation Fork Manager**: Complete fork analysis and visualization system for Claude Code conversations
