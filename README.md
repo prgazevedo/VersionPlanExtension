@@ -308,11 +308,11 @@ For security issues, please report them privately via GitHub's security advisory
 
 For detailed release notes and version history, see [CHANGELOG.md](./CHANGELOG.md).
 
-**Latest Release**: v3.5.6 - ccusage Auto-Refresh & Reliability Update
-- Fixed ccusage integration with auto-refresh mechanism for unavailable states
-- Added automatic retry every 5 seconds when ccusage is temporarily unavailable
-- Improved user experience with manual refresh button and visual feedback
-- Resolved "stuck loading" issue in Usage Monitor panel
+**Latest Release**: v3.5.7 - Dependency Cleanup & CI Update
+- Removed unused node-fetch dependency (reduced package size)
+- Updated GitHub Actions workflow (actions/checkout v4 → v5)
+- Improved build security and reduced dependency footprint
+- Package size optimization through dependency cleanup
 
 ## License
 

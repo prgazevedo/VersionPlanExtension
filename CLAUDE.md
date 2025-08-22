@@ -338,6 +338,13 @@ Example with configured base path `/DSM3/GPT_Projects/claude-config-manager/`:
 
 ## Recent Updates
 
+### v3.5.7 - Dependency Cleanup & CI Update
+
+- **🧹 Removed Unused Dependencies**: Eliminated node-fetch and @types/node-fetch (never used in codebase)
+- **⬆️ CI/CD Update**: Updated GitHub Actions workflow (actions/checkout v4 → v5)
+- **📦 Package Optimization**: Reduced package size by removing unnecessary dependencies
+- **🔒 Improved Security**: Fewer dependencies means smaller attack surface
+
 ### v3.5.6 - ccusage Auto-Refresh & Reliability Update
 
 - **🔧 Fixed ccusage Integration**: Resolved "unavailable" state in Usage Monitor panel with automatic recovery
