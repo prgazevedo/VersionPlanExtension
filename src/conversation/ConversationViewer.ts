@@ -4,7 +4,6 @@ import * as fs from 'fs-extra';
 import * as os from 'os';
 import { ConversationManager } from './ConversationManager';
 import { ConversationSummary, ConversationSession, ConversationMessage } from './types';
-import { ForkAnalyzer } from './fork/ForkAnalyzer';
 
 export class ConversationViewer {
     private panel: vscode.WebviewPanel | undefined;
@@ -936,15 +935,8 @@ export class ConversationViewer {
             }
         }
 
-        // Analyze forks in the conversation
-        try {
-            const forkAnalyzer = new ForkAnalyzer();
-            const analysis = forkAnalyzer.analyzeMessages(messages);
-            metadata.forkCount = analysis.forkCount;
-        } catch (error) {
-            console.warn('[ConversationViewer] Fork analysis failed:', error);
-            metadata.forkCount = 0;
-        }
+        // Fork count removed - Claude Code now has native fork management
+        metadata.forkCount = 0;
 
         return metadata;
     }

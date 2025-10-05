@@ -1192,80 +1192,8 @@ async function generateUsageStatsHtml(): Promise<string> {
 
 
 export async function installCcusageHelpCommand(): Promise<void> {
-    const items: vscode.QuickPickItem[] = [
-        {
-            label: '🚀 Install Bun (Recommended)',
-            detail: 'Fast package manager and runtime - bunx ccusage',
-            description: 'Open https://bun.sh'
-        },
-        {
-            label: '📦 Install Bun VS Code Extension',
-            detail: 'Bun integration for VS Code',
-            description: 'Search in Extensions marketplace'
-        },
-        {
-            label: '🟢 Use Node.js (npx)',
-            detail: 'Use existing Node.js installation - npx ccusage',
-            description: 'Requires Node.js to be installed'
-        },
-        {
-            label: '📊 Test ccusage Availability',
-            detail: 'Check which runners are available',
-            description: 'Run debug command'
-        }
-    ];
-
-    const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Choose how to enable ccusage integration',
-        ignoreFocusOut: true
-    });
-
-    if (!selected) {
-        return;
-    }
-
-    switch (selected.label) {
-        case '🚀 Install Bun (Recommended)':
-            vscode.env.openExternal(vscode.Uri.parse('https://bun.sh'));
-            vscode.window.showInformationMessage(
-                'After installing Bun, restart VS Code and try the Usage Monitor again.',
-                'Test ccusage'
-            ).then(selection => {
-                if (selection === 'Test ccusage') {
-                    vscode.commands.executeCommand('claude-config.debugCcusage');
-                }
-            });
-            break;
-            
-        case '📦 Install Bun VS Code Extension':
-            vscode.commands.executeCommand('workbench.extensions.search', 'oven.bun-vscode');
-            vscode.window.showInformationMessage(
-                'Install the "Bun for Visual Studio Code" extension, then restart VS Code.',
-                'Test ccusage'
-            ).then(selection => {
-                if (selection === 'Test ccusage') {
-                    vscode.commands.executeCommand('claude-config.debugCcusage');
-                }
-            });
-            break;
-            
-        case '🟢 Use Node.js (npx)':
-            vscode.window.showInformationMessage(
-                'Make sure Node.js is installed from https://nodejs.org, then test ccusage.',
-                'Open Node.js Site', 'Test ccusage'
-            ).then(selection => {
-                if (selection === 'Open Node.js Site') {
-                    vscode.env.openExternal(vscode.Uri.parse('https://nodejs.org'));
-                } else if (selection === 'Test ccusage') {
-                    vscode.commands.executeCommand('claude-config.debugCcusage');
-                }
-            });
-            break;
-            
-        case '📊 Test ccusage Availability':
-            vscode.commands.executeCommand('claude-config.debugCcusage');
-            break;
-    }
+    // Just run the debug command to check availability
+    vscode.commands.executeCommand('claude-config.debugCcusage');
 }
 
 export async function debugCcusageCommand(): Promise<void> {

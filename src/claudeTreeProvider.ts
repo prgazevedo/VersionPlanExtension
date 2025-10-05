@@ -41,7 +41,7 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
 
         const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
         const claudeFilePath = path.join(workspacePath, 'CLAUDE.md');
-        const planFilePath = path.join(workspacePath, '.claude', '.plans', 'PROJECT_PLAN.md');
+        const planFilePath = path.join(workspacePath, 'PROJECT_PLAN.md');
         const claudeFileExists = await fs.pathExists(claudeFilePath);
         const planFileExists = await fs.pathExists(planFilePath);
 
@@ -86,29 +86,6 @@ export class ClaudeTreeDataProvider implements vscode.TreeDataProvider<ClaudeTre
                 'sync'
             ));
         }
-
-        // Context7 actions
-        items.push(new ClaudeTreeItem(
-            'Toggle Context7',
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.toggleContext7',
-                title: 'Toggle Context7 Auto-Append',
-                arguments: []
-            },
-            'link'
-        ));
-
-        items.push(new ClaudeTreeItem(
-            'Context7 Setup Help',
-            vscode.TreeItemCollapsibleState.None,
-            {
-                command: 'claude-config.installContext7Help',
-                title: 'Context7 Installation Help',
-                arguments: []
-            },
-            'question'
-        ));
 
         // Cloud sync action (replaces export all conversations)
         items.push(new ClaudeTreeItem(

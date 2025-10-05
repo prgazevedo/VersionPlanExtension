@@ -75,23 +75,32 @@ The extension includes a custom activity bar icon with integrated sidebar views 
 - Legacy token tracking component (maintained for extension infrastructure)
 - Provides extension activation and configuration management
 - Used for status bar updates and basic usage metadata
-- **Note**: Primary usage tracking now handled by ccusage integration
+- **Note**: Primary usage tracking now handled by native JSONL parser
+
+**UsageCalculator** (`src/services/UsageCalculator.ts`):
+- **NEW v3.8.0**: Native JSONL parser for direct usage tracking
+- Reads conversation files directly from `~/.claude/projects/`
+- Zero external dependencies - no CLI tools required
+- Instant performance with 30-second caching
+- Calculates tokens by type (input, output, cache creation, cache read)
+- Accurate cost calculations based on model pricing
+- Supports daily, monthly, session, and time-window queries
 
 **CcusageService** (`src/services/CcusageService.ts`):
-- **NEW v3.3.1**: Core service wrapper for ccusage CLI integration
-- Smart package manager detection with automatic fallback (bunx → npx → npm exec)
-- 30-second caching system to minimize CLI calls while providing real-time updates
-- Handles ccusage command execution with proper error handling and timeout management
+- **UPDATED v3.8.0**: Service wrapper now uses native UsageCalculator
+- Maintains backward-compatible API for existing components
+- Removed external CLI execution (bunx/npx/npm)
+- Direct JSONL parsing replaces CLI tool integration
 - Provides methods for daily, session, monthly, and live usage data retrieval
 - Data path configuration support for custom Claude conversation directories
 
-**ccusage-Powered Usage Monitor** (`src/components/UsageMonitor.ts`):
-- **UPDATED v3.3.1**: Real-time usage display powered by ccusage CLI integration
+**Native Usage Monitor** (`src/components/UsageMonitor.ts`):
+- **UPDATED v3.8.0**: Real-time usage display powered by native JSONL parser
 - Clean card-based interface showing today's tokens, costs, and breakdowns
 - Displays input, output, cache creation, and cache read token statistics
 - Model detection and usage breakdown by Claude model types
-- Graceful error handling with helpful installation guidance
-- Automatic fallback across package managers when ccusage is unavailable
+- Instant performance - no external tool required
+- Zero setup complexity
 
 ### WebDAV Cloud Sync Architecture
 
@@ -230,10 +239,11 @@ The extension syncs CLAUDE.md files directly to the workspace's existing Git rep
 When CLAUDE.md is detected in the workspace:
 
 - Extension automatically adds PROJECT_PLAN integration rules to CLAUDE.md
-- Creates `.claude/.plans/PROJECT_PLAN.md` template when requested
+- Creates `PROJECT_PLAN.md` in the workspace root when requested
 - Instructions tell Claude Code to read and maintain the project plan
 - Plan mode sessions use PROJECT_PLAN.md as the central repository
 - Manual command available if automatic rule addition is needed
+- **Location**: PROJECT_PLAN.md is now created at the workspace root for better visibility and Claude Code integration
 
 ### Conversation History Browser
 
@@ -267,32 +277,34 @@ The extension provides comprehensive conversation history management:
 - Conversation files (`.claude/.chats/`) are excluded from Git tracking to prevent accidental secret exposure
 - GitHub push protection integration to block commits containing sensitive data
 
-### ccusage-Powered Usage Tracking
+### Native Usage Tracking
 
-The extension provides accurate token usage monitoring powered by the ccusage CLI tool:
+The extension provides accurate token usage monitoring with native JSONL parsing:
 
-**ccusage Integration:**
+**Native JSONL Parser (v3.8.0):**
 
-- **Real Usage Data**: Direct integration with ccusage CLI for accurate Claude Code usage statistics
-- **Automatic Package Manager Detection**: Smart fallback across bunx → npx → npm exec for seamless setup
-- **No Installation Required**: Uses existing package managers without requiring ccusage pre-installation
-- **Cached Performance**: 30-second caching to minimize CLI calls while providing real-time updates
+- **Direct File Reading**: Reads conversation files directly from `~/.claude/projects/` directory
+- **Zero Dependencies**: No external CLI tools or package managers required
+- **Instant Performance**: Native TypeScript implementation with no process spawning
+- **Cached Performance**: 30-second caching for optimal performance
+- **Accurate Data**: Parses actual Claude Code usage fields from conversation messages
 
-**ccusage-Powered Features:**
+**Native Tracking Features:**
 
 - **Today's Usage Display**: Real-time tokens, costs, and model usage from actual Claude Code data
 - **Token Breakdown**: Detailed breakdown of input, output, cache creation, and cache read tokens
 - **Model Detection**: Automatic detection and display of Claude models used (Opus, Sonnet, etc.)
 - **Daily, Monthly, Session Views**: Multiple time perspectives of usage data
-- **Cost Accuracy**: Real cost calculations based on actual token usage, not estimates
-- **Clean Error Handling**: Helpful guidance when ccusage is unavailable, with installation instructions
+- **Cost Accuracy**: Real cost calculations based on model-specific pricing
+- **Time Windows**: 5-hour rolling window tracking for context management
 
 **Technical Architecture:**
 
-- **CcusageService** (`src/services/CcusageService.ts`): Core service wrapper for ccusage CLI integration
-- **Smart Execution**: Tries bunx first (fastest), falls back to npx, then npm exec
+- **UsageCalculator** (`src/services/UsageCalculator.ts`): Core native JSONL parser
+- **Direct Parsing**: Reads and parses JSONL message format with usage fields
 - **Data Path Detection**: Uses configured conversation data path or defaults to ~/.claude/projects
-- **Error Recovery**: Graceful handling of missing package managers with clear user guidance
+- **Model Pricing**: Built-in pricing tables for accurate cost calculations
+- **CcusageService** (`src/services/CcusageService.ts`): Backward-compatible wrapper using UsageCalculator
 
 ### WebDAV Cloud Sync Integration
 
@@ -337,6 +349,35 @@ Example with configured base path `/DSM3/GPT_Projects/claude-config-manager/`:
 - **Settings Integration**: Cloud configuration accessible through VS Code settings panel
 
 ## Recent Updates
+
+### v3.8.0 - Native Usage Tracker (Major Performance Release)
+
+- **🚀 Native JSONL Parser**: Replaced external ccusage CLI with native TypeScript implementation
+  - Zero external dependencies - no bunx/npx/npm required
+  - Instant performance - no process spawning overhead
+  - Reads directly from `~/.claude/projects/` JSONL files
+  - Built-in model pricing and cost calculations
+- **🆕 UsageCalculator**: New core service for native usage tracking
+  - Parses Claude Code message format with usage fields
+  - Supports daily, monthly, session, and time-window queries
+  - 30-second caching for optimal performance
+- **♻️ CcusageService Refactored**: Migrated to use native calculator
+  - Maintains backward-compatible API
+  - All existing features work unchanged
+  - Removed CLI execution code
+- **📦 Package Improvements**: Smaller, faster, more reliable
+  - No package manager detection needed
+  - Easier debugging (pure TypeScript)
+  - Foundation for future real-time updates
+
+### v3.7.0 - Context7 Auto-Append Removal & Cleanup
+
+- **🧹 Removed Context7 Auto-Append**: Removed Context7 toggle and automatic CLAUDE.md rule injection
+  - Context7 MCP server provides superior integration directly with Claude Code
+  - Eliminated complexity from extension codebase
+  - Users should install Context7 MCP for better documentation access
+- **📚 Documentation Updates**: Updated all documentation to reflect v3.7.0 changes
+- **🔧 Technical Cleanup**: Removed Context7-related code from extension.ts and claudeTreeProvider.ts
 
 ### v3.5.7 - Dependency Cleanup & CI Update
 
@@ -515,11 +556,11 @@ Example with configured base path `/DSM3/GPT_Projects/claude-config-manager/`:
 
 ### Added by Claude Config Manager Extension
 
-When working on this project, always refer to and maintain the project plan located at `.claude/.plans/PROJECT_PLAN.md`.
+When working on this project, always refer to and maintain the project plan located at `PROJECT_PLAN.md` in the workspace root.
 
 **Instructions for Claude Code:**
 
-1. **Read the project plan first** - Always check `.claude/.plans/PROJECT_PLAN.md` when starting work to understand the project context, architecture, and current priorities.
+1. **Read the project plan first** - Always check `PROJECT_PLAN.md` when starting work to understand the project context, architecture, and current priorities.
 2. **Update the project plan regularly** - When making significant changes, discoveries, or completing major features, update the relevant sections in PROJECT_PLAN.md to keep it current.
 3. **Use it for context** - Reference the project plan when making architectural decisions, understanding dependencies, or explaining code to ensure consistency with project goals.
 
@@ -534,15 +575,4 @@ When working on this project, always refer to and maintain the project plan loca
 This ensures better code quality and maintains project knowledge continuity across different Claude Code sessions and plan mode iterations.
 
 
-# Context7 Integration
-# Added by Claude Config Manager Extension
 
-When responding to coding requests, automatically append "use context7" to retrieve real-time, version-specific documentation.
-
-**Instructions for Claude Code:**
-- For any prompt involving code generation, debugging, or technical questions, automatically include context7
-- This ensures you have access to the most current API documentation and examples
-- Prevents outdated or hallucinated code responses
-
-**Activation**: This rule is active. All coding prompts will trigger context7 documentation retrieval.
-**Benefits**: Real-time documentation, accurate API references, up-to-date code examples.
