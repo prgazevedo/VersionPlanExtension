@@ -11,7 +11,7 @@ export class UsageMonitorTreeProvider implements vscode.TreeDataProvider<UsageMo
 
     constructor() {
         this.tokenWindowMonitor = TokenWindowMonitor.getInstance();
-        
+
         // Listen for token window updates
         this.tokenWindowMonitor.onDataUpdated((data) => {
             this.currentWindowData = data;
@@ -35,41 +35,54 @@ export class UsageMonitorTreeProvider implements vscode.TreeDataProvider<UsageMo
         if (!element) {
             const items: UsageMonitorItem[] = [];
 
-            // Token Window Status - all items at root level
+            // Token Window Status - Subscription-focused view
             if (this.currentWindowData) {
                 const display = this.tokenWindowMonitor.formatForDisplay(this.currentWindowData);
-                const subscriptionInfo = await this.tokenWindowMonitor.getSubscriptionInfo();
-                
-                // Current usage (main item)
+
+                // === SUBSCRIPTION INFO (most important for subscribed users) ===
                 items.push(new UsageMonitorItem(
-                    `${display.statusIcon} Current Usage`,
-                    `${display.currentPercentageText} - ${display.currentUsageText}`,
+                    '👤 Subscription',
+                    'Claude Pro (Unlimited)',
                     vscode.TreeItemCollapsibleState.None,
-                    'token-window',
+                    'subscription-tier',
+                    new vscode.ThemeIcon('organization'),
+                    undefined
+                ));
+
+                // === 5-HOUR WINDOW USAGE ===
+                items.push(new UsageMonitorItem(
+                    '📊 Window Usage',
+                    display.totalTokensText,
+                    vscode.TreeItemCollapsibleState.None,
+                    'token-window-total',
                     new vscode.ThemeIcon('pulse'),
                     undefined
                 ));
 
-                // Current progress bar
-                items.push(new UsageMonitorItem(
-                    '📊 Current Progress',
-                    display.currentProgressBar,
-                    vscode.TreeItemCollapsibleState.None,
-                    'token-window-current-progress',
-                    new vscode.ThemeIcon('pulse'),
-                    undefined
-                ));
-                
-                // Time window information
-                items.push(new UsageMonitorItem(
-                    '⏰ Time Window',
-                    display.windowTimeText,
-                    vscode.TreeItemCollapsibleState.None,
-                    'token-window-time-window',
-                    new vscode.ThemeIcon('calendar'),
-                    undefined
-                ));
-                
+                if (display.projectionText) {
+                    items.push(new UsageMonitorItem(
+                        '🎯 Projected at Window End',
+                        display.projectionText,
+                        vscode.TreeItemCollapsibleState.None,
+                        'token-window-projection',
+                        new vscode.ThemeIcon('target'),
+                        undefined
+                    ));
+                }
+
+                // === BURN RATE ===
+                if (display.burnRateText) {
+                    items.push(new UsageMonitorItem(
+                        '🔥 Burn Rate',
+                        display.burnRateText,
+                        vscode.TreeItemCollapsibleState.None,
+                        'token-window-burn-rate',
+                        new vscode.ThemeIcon('flame'),
+                        undefined
+                    ));
+                }
+
+                // === TIME INFO ===
                 items.push(new UsageMonitorItem(
                     '⏳ Time Remaining',
                     display.timeRemainingText,
@@ -78,49 +91,43 @@ export class UsageMonitorTreeProvider implements vscode.TreeDataProvider<UsageMo
                     new vscode.ThemeIcon('watch'),
                     undefined
                 ));
-                
-                // Burn rate information
+
                 items.push(new UsageMonitorItem(
-                    '🔥 Burn Rate',
-                    display.burnRateText,
+                    '⏰ Window Period',
+                    display.windowTimeText,
                     vscode.TreeItemCollapsibleState.None,
-                    'token-window-burn-rate',
-                    new vscode.ThemeIcon('graph-line'),
+                    'token-window-time-window',
+                    new vscode.ThemeIcon('calendar'),
                     undefined
                 ));
-                
-                // Subscription tier
+
+                // === DETAILS ===
                 items.push(new UsageMonitorItem(
-                    '👤 Subscription',
-                    `${subscriptionInfo.tier} (${subscriptionInfo.confidence} confidence)`,
+                    '🤖 Model',
+                    display.modelsText,
                     vscode.TreeItemCollapsibleState.None,
-                    'token-window-subscription-tier',
-                    new vscode.ThemeIcon('account'),
+                    'token-window-models',
+                    new vscode.ThemeIcon('code'),
                     undefined
                 ));
-                
-                // Detailed projection
+
                 items.push(new UsageMonitorItem(
-                    '📈 Projection Details',
-                    display.projectionText,
+                    '🔄 API Calls',
+                    display.entriesText,
                     vscode.TreeItemCollapsibleState.None,
-                    'token-window-projection-details',
-                    new vscode.ThemeIcon('graph'),
+                    'token-window-entries',
+                    new vscode.ThemeIcon('symbol-number'),
                     undefined
                 ));
             } else {
-                // Check if we've received an error signal (null) vs still loading (undefined)
-                const isError = this.currentWindowData === null;
+                // Token Window disabled - show helpful message
                 items.push(new UsageMonitorItem(
-                    isError ? '❌ Token Window' : '⚪ Token Window',
-                    isError ? 'ccusage unavailable - package issues detected' : 'Loading usage data...',
+                    'ℹ️ Token Window',
+                    'Advanced token window tracking (coming soon)',
                     vscode.TreeItemCollapsibleState.None,
                     'token-window',
-                    new vscode.ThemeIcon(isError ? 'error' : 'loading~spin'),
-                    {
-                        command: 'claude-config.refreshTokenWindow',
-                        title: 'Refresh Token Window'
-                    }
+                    new vscode.ThemeIcon('info'),
+                    undefined
                 ));
             }
 

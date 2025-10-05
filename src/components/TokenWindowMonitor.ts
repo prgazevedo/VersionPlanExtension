@@ -2,50 +2,75 @@ import * as vscode from 'vscode';
 import { CcusageService } from '../services/CcusageService';
 import { loggers } from '../utils/Logger';
 
-export interface TokenWindowData {
-    currentUsage: number;
-    currentPercentage: number;
-    projectedUsage: number;
-    projectedPercentage: number;
-    limit: number;
-    windowStart: Date;
-    windowEnd: Date;
-    resetTime: Date;
-    status: 'ok' | 'warning' | 'critical';
-    projection: {
-        totalTokens: number;
-        totalCost: number;
-        remainingMinutes: number;
-    };
-    burnRate: {
-        tokensPerMinute: number;
-        tokensPerHour: number;
-        costPerHour: number;
-    };
-    windowId: string;
-    isActive: boolean;
-    timeElapsed: number;
-    timeRemaining: number;
+/**
+ * Token counts breakdown from ccusage
+ */
+export interface TokenCounts {
+    inputTokens: number;
+    outputTokens: number;
+    cacheCreationInputTokens: number;
+    cacheReadInputTokens: number;
 }
 
-interface SubscriptionInfo {
-    tier: string;
-    estimatedLimit: number;
-    confidence: 'low' | 'medium' | 'high';
+/**
+ * Burn rate information from ccusage
+ */
+export interface BurnRate {
+    tokensPerMinute: number;
+    tokensPerMinuteForIndicator: number;
+    costPerHour: number;
+}
+
+/**
+ * Projection data from ccusage
+ */
+export interface Projection {
+    totalTokens: number;
+    totalCost: number;
+    remainingMinutes: number;
+}
+
+/**
+ * Token window data matching ccusage blocks --active --json output
+ */
+export interface TokenWindowData {
+    id: string;
+    startTime: Date;
+    endTime: Date;
+    actualEndTime: Date;
+    isActive: boolean;
+    isGap: boolean;
+    entries: number;
+    tokenCounts: TokenCounts;
+    totalTokens: number;
+    costUSD: number;
+    models: string[];
+    burnRate?: BurnRate;
+    projection?: Projection;
 }
 
 interface DisplayData {
-    currentProgressBar: string;
-    currentUsageText: string;
-    currentPercentageText: string;
-    projectedProgressBar: string;
-    projectedUsageText: string;
-    projectedPercentageText: string;
+    // Basic info
+    totalTokensText: string;
+    totalCostText: string;
     windowTimeText: string;
     timeRemainingText: string;
-    burnRateText: string;
-    statusIcon: string;
-    projectionText: string;
+    modelsText: string;
+    entriesText: string;
+
+    // Token breakdown
+    inputTokensText: string;
+    outputTokensText: string;
+    cacheCreationText: string;
+    cacheReadText: string;
+
+    // Burn rate
+    burnRateText?: string;
+    costPerHourText?: string;
+
+    // Projection
+    projectionText?: string;
+    projectedCostText?: string;
 }
 
 /**
@@ -103,273 +128,178 @@ export class TokenWindowMonitor {
      */
     public async getCurrentWindow(): Promise<TokenWindowData | null> {
         try {
-            const result = await this.ccusageService.executeCcusage('blocks --active --token-limit max --json');
-            const data = JSON.parse(result);
+            this.logger.debug('Executing ccusage blocks command...');
+            const result = await this.ccusageService.executeCcusage('blocks --active --json --breakdown');
+            this.logger.debug('ccusage command executed, result length:', result.length);
+            this.logger.debug('First 200 chars of result:', result.substring(0, 200));
 
+            // EMERGENCY FIX: Strip any non-JSON lines (like "[ccusage] ⚙ No valid configuration file found")
+            const lines = result.split('\n');
+            // Look for line starting with { (object) or [ followed by whitespace/newline (array, not [ccusage])
+            const jsonStartIndex = lines.findIndex(line => {
+                const trimmed = line.trim();
+                return trimmed.startsWith('{') || (trimmed.startsWith('[') && (trimmed.length === 1 || trimmed[1] === '\n' || trimmed[1] === ' ' || trimmed[1] === '\r'));
+            });
+            const cleanResult = jsonStartIndex >= 0 ? lines.slice(jsonStartIndex).join('\n') : result;
+
+            let data;
+            try {
+                data = JSON.parse(cleanResult);
+                this.logger.debug('Parsed JSON data successfully');
+
+            } catch (parseError) {
+                this.logger.error('JSON PARSE FAILED! Clean result was:', cleanResult);
+                this.logger.error('Parse error:', parseError);
+                throw parseError;
+            }
             if (!data.blocks || data.blocks.length === 0) {
+                this.logger.warn('No blocks found in ccusage response');
                 return null;
             }
 
             const activeBlock = data.blocks.find((block: any) => block.isActive) || data.blocks[0];
-            return this.parseBlockData(activeBlock);
+            this.logger.debug('Found active block:', activeBlock);
+
+            const windowData = this.parseBlockData(activeBlock);
+            this.logger.debug('Parsed window data successfully');
+            return windowData;
         } catch (error) {
             this.logger.error('Failed to get current window data:', error);
+            if (error instanceof Error) {
+                this.logger.error('Error stack:', error.stack);
+            }
             return null;
         }
+    }
+
+    /**
+     * Estimate subscription tier based on usage patterns
+     */
+    private estimateSubscriptionTier(data: TokenWindowData): string {
+        // Check if using premium models (Opus, Sonnet 4)
+        const models = data.models.join(' ').toLowerCase();
+        const usingPremiumModels = models.includes('opus') || models.includes('sonnet-4');
+
+        // High token usage suggests Pro tier
+        const highUsage = data.totalTokens > 1000000; // 1M+ tokens in 5 hours
+
+        if (usingPremiumModels || highUsage) {
+            return 'Claude Pro';
+        }
+
+        return 'Claude Free';
     }
 
     /**
      * Get formatted display data for UI components
      */
     public formatForDisplay(data: TokenWindowData): DisplayData {
-        // Current usage display
-        const currentProgressBar = this.createProgressBar(data.currentPercentage);
-        const currentPercentageText = `${data.currentPercentage.toFixed(1)}%`;
-        const currentUsageText = `${this.formatTokenCount(data.currentUsage)} / ${this.formatTokenCount(data.limit)} tokens`;
+        // Basic info
+        const totalTokensText = `${this.formatTokenCount(data.totalTokens)} total`;
+        const totalCostText = `$${data.costUSD.toFixed(2)}`;
+        const subscriptionTier = this.estimateSubscriptionTier(data);
+        const windowTimeText = this.formatTimeWindow(data.startTime, data.endTime);
 
-        // Projected usage display
-        const projectedProgressBar = this.createProgressBar(data.projectedPercentage);
-        const projectedPercentageText = `${data.projectedPercentage.toFixed(1)}%`;
-        const projectedUsageText = `${this.formatTokenCount(data.projectedUsage)} / ${this.formatTokenCount(data.limit)} tokens (projected)`;
+        // Time remaining
+        const now = new Date();
+        const remainingMs = data.endTime.getTime() - now.getTime();
+        const remainingMinutes = Math.max(0, Math.floor(remainingMs / (1000 * 60)));
+        const timeRemainingText = this.formatTimeRemaining(remainingMinutes);
 
-        // Time window display
-        const windowTimeText = this.formatTimeWindow(data.windowStart, data.windowEnd);
-        const timeRemainingText = this.formatTimeRemaining(data.timeRemaining);
+        const modelsText = data.models.length > 0 ? data.models.join(', ') : 'No models';
+        const entriesText = `${data.entries} API calls`;
 
-        // Burn rate display
-        const burnRateText = `${this.formatTokenCount(data.burnRate.tokensPerHour)}/hour (${this.formatTokenCount(data.burnRate.tokensPerMinute)}/min)`;
+        // Token breakdown
+        const inputTokensText = this.formatTokenCount(data.tokenCounts.inputTokens);
+        const outputTokensText = this.formatTokenCount(data.tokenCounts.outputTokens);
+        const cacheCreationText = this.formatTokenCount(data.tokenCounts.cacheCreationInputTokens);
+        const cacheReadText = this.formatTokenCount(data.tokenCounts.cacheReadInputTokens);
 
-        // Status icon based on projected usage
-        const statusIcon = this.getStatusIcon(data.status);
+        // Burn rate (if available)
+        let burnRateText: string | undefined;
+        let costPerHourText: string | undefined;
+        if (data.burnRate) {
+            burnRateText = `${this.formatTokenCount(Math.round(data.burnRate.tokensPerMinute))}/min`;
+            costPerHourText = `$${data.burnRate.costPerHour.toFixed(2)}/hour`;
+        }
 
-        // Enhanced projection text with limit breach timing
-        let projectionText = 'No projection available';
-        if (data.burnRate.tokensPerMinute > 0) {
-            const remainingTokensToLimit = data.limit - data.currentUsage;
-            const minutesToLimit = remainingTokensToLimit / data.burnRate.tokensPerMinute;
-
-            if (minutesToLimit > 0 && minutesToLimit <= data.timeRemaining) {
-                // Will hit limit before window ends
-                const limitReachedTime = new Date(Date.now() + (minutesToLimit * 60 * 1000));
-                const timeString = limitReachedTime.toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-
-                const hoursToLimit = Math.floor(minutesToLimit / 60);
-                const minsToLimit = Math.round(minutesToLimit % 60);
-
-                if (hoursToLimit > 0) {
-                    projectionText = `⚠️ Limit reached in ${hoursToLimit}h ${minsToLimit}m (at ${timeString})`;
-                } else {
-                    projectionText = `⚠️ Limit reached in ${minsToLimit}m (at ${timeString})`;
-                }
-            } else if (data.projection.remainingMinutes > 0) {
-                // Won't hit limit, show end-of-window projection
-                projectionText = `✅ Safe: ${this.formatTokenCount(data.projection.totalTokens)} total by window end, $${data.projection.totalCost.toFixed(2)} cost`;
-            }
+        // Projection (if available)
+        let projectionText: string | undefined;
+        let projectedCostText: string | undefined;
+        if (data.projection) {
+            projectionText = `${this.formatTokenCount(data.projection.totalTokens)} (in ${data.projection.remainingMinutes}m)`;
+            projectedCostText = `$${data.projection.totalCost.toFixed(2)}`;
         }
 
         return {
-            currentProgressBar,
-            currentUsageText,
-            currentPercentageText,
-            projectedProgressBar,
-            projectedUsageText,
-            projectedPercentageText,
+            totalTokensText,
+            totalCostText,
             windowTimeText,
             timeRemainingText,
+            modelsText,
+            entriesText,
+            inputTokensText,
+            outputTokensText,
+            cacheCreationText,
+            cacheReadText,
             burnRateText,
-            statusIcon,
-            projectionText
+            costPerHourText,
+            projectionText,
+            projectedCostText
         };
     }
 
-    /**
-     * Get subscription tier information from usage patterns
-     */
-    public async getSubscriptionInfo(): Promise<SubscriptionInfo> {
-        try {
-            const windowData = await this.getCurrentWindow();
-            if (!windowData) {
-                return { tier: 'unknown', estimatedLimit: 0, confidence: 'low' };
-            }
-
-            // Estimate tier based on token limits
-            const limit = windowData.limit;
-
-            if (limit >= 40000000) { // 40M+ tokens suggests Max tier
-                return {
-                    tier: 'Max',
-                    estimatedLimit: limit,
-                    confidence: 'high'
-                };
-            } else if (limit >= 8000000) { // 8M+ tokens suggests Pro tier
-                return {
-                    tier: 'Pro',
-                    estimatedLimit: limit,
-                    confidence: 'medium'
-                };
-            } else if (limit > 0) {
-                return {
-                    tier: 'Free',
-                    estimatedLimit: limit,
-                    confidence: 'medium'
-                };
-            }
-
-            return { tier: 'unknown', estimatedLimit: 0, confidence: 'low' };
-        } catch (error) {
-            this.logger.error('Failed to get subscription info:', error);
-            return { tier: 'unknown', estimatedLimit: 0, confidence: 'low' };
-        }
-    }
 
     private async fetchWindowData(): Promise<void> {
         try {
+            this.logger.debug('Fetching token window data...');
             const windowData = await this.getCurrentWindow();
             if (windowData) {
+                this.logger.debug('Token window data fetched successfully');
                 this.onDataUpdatedEmitter.fire(windowData);
             } else {
-                // Fire a null/error state so UI can show appropriate message
-                this.onDataUpdatedEmitter.fire(null as any);
+                this.logger.warn('No token window data available - ccusage returned no blocks');
+                // Don't fire null - just skip this update
             }
         } catch (error) {
             this.logger.error('Error fetching window data:', error);
-            // Fire a null/error state so UI can show appropriate message
-            this.onDataUpdatedEmitter.fire(null as any);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logger.error('Error details:', errorMessage);
+            // Don't fire null - just skip this update
         }
     }
 
-    private parseSimpleData(dayData: any): TokenWindowData {
-        const currentUsage = dayData?.totalTokens || 0;
-        const totalCost = dayData?.totalCost || 0;
-        
-        // Estimate limits based on typical Claude usage patterns
-        // Free tier: ~100K tokens, Pro: ~500K tokens per month
-        const estimatedLimit = totalCost > 0 ? 500000 : 100000; // Rough estimation
-        
-        const currentPercentage = estimatedLimit > 0 ? (currentUsage / estimatedLimit) * 100 : 0;
-        const projectedUsage = currentUsage; // For daily data, current = projected
-        const projectedPercentage = currentPercentage;
-
-        // Create date ranges (daily window)
-        const today = new Date();
-        const windowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const windowEnd = new Date(windowStart);
-        windowEnd.setDate(windowEnd.getDate() + 1);
-        
-        // Next reset is tomorrow
-        const resetTime = new Date(windowEnd);
-        
-        const status: 'ok' | 'warning' | 'critical' = 
-            currentPercentage > 90 ? 'critical' :
-            currentPercentage > 70 ? 'warning' : 'ok';
-
-        const timeElapsed = Date.now() - windowStart.getTime();
-        const timeRemaining = windowEnd.getTime() - Date.now();
-        const remainingMinutes = Math.max(0, Math.floor(timeRemaining / (1000 * 60)));
-
-        return {
-            currentUsage,
-            currentPercentage,
-            projectedUsage,
-            projectedPercentage,
-            limit: estimatedLimit,
-            windowStart,
-            windowEnd,
-            resetTime,
-            status,
-            projection: {
-                totalTokens: projectedUsage,
-                totalCost: totalCost,
-                remainingMinutes
-            },
-            burnRate: {
-                tokensPerMinute: timeElapsed > 0 ? currentUsage / (timeElapsed / (1000 * 60)) : 0,
-                tokensPerHour: timeElapsed > 0 ? currentUsage / (timeElapsed / (1000 * 60 * 60)) : 0,
-                costPerHour: timeElapsed > 0 ? totalCost / (timeElapsed / (1000 * 60 * 60)) : 0
-            },
-            windowId: dayData?.date || today.toISOString().split('T')[0],
-            isActive: true,
-            timeElapsed: timeElapsed,
-            timeRemaining: timeRemaining
-        };
-    }
 
     private parseBlockData(block: any): TokenWindowData {
-        const currentUsage = block.totalTokens || 0;
-        const limit = block.tokenLimitStatus?.limit || 0;
-        const projectedUsage = block.projection?.totalTokens || currentUsage;
-
-        // Calculate current and projected percentages
-        const currentPercentage = limit > 0 ? (currentUsage / limit) * 100 : 0;
-        const projectedPercentage = limit > 0 ? (projectedUsage / limit) * 100 : 0;
-
-        // Parse time information
-        const windowStart = new Date(block.startTime);
-        const windowEnd = new Date(block.endTime);
-        const resetTime = windowEnd;
-        const now = new Date();
-
-        // Calculate time elapsed and remaining
-        const totalWindowMinutes = Math.round((windowEnd.getTime() - windowStart.getTime()) / (1000 * 60));
-        const elapsedMinutes = Math.round((now.getTime() - windowStart.getTime()) / (1000 * 60));
-        const remainingMinutes = Math.max(0, Math.round((windowEnd.getTime() - now.getTime()) / (1000 * 60)));
-
-        // Determine status based on projected percentage (what matters for billing)
-        let status: 'ok' | 'warning' | 'critical' = 'ok';
-        if (projectedPercentage >= 90) {
-            status = 'critical';
-        } else if (projectedPercentage >= 75) {
-            status = 'warning';
-        }
-
+        // Parse all data from ccusage blocks --active --json output
         return {
-            currentUsage,
-            currentPercentage,
-            projectedUsage,
-            projectedPercentage,
-            limit,
-            windowStart,
-            windowEnd,
-            resetTime,
-            status,
-            projection: {
-                totalTokens: block.projection?.totalTokens || 0,
-                totalCost: block.projection?.totalCost || 0,
-                remainingMinutes: block.projection?.remainingMinutes || 0
-            },
-            burnRate: {
-                tokensPerMinute: block.burnRate?.tokensPerMinute || 0,
-                tokensPerHour: (block.burnRate?.tokensPerMinute || 0) * 60,
-                costPerHour: block.burnRate?.costPerHour || 0
-            },
-            windowId: block.id,
+            id: block.id || 'unknown',
+            startTime: new Date(block.startTime),
+            endTime: new Date(block.endTime),
+            actualEndTime: new Date(block.actualEndTime),
             isActive: block.isActive || false,
-            timeElapsed: elapsedMinutes,
-            timeRemaining: remainingMinutes
+            isGap: block.isGap || false,
+            entries: block.entries || 0,
+            tokenCounts: {
+                inputTokens: block.tokenCounts?.inputTokens || 0,
+                outputTokens: block.tokenCounts?.outputTokens || 0,
+                cacheCreationInputTokens: block.tokenCounts?.cacheCreationInputTokens || 0,
+                cacheReadInputTokens: block.tokenCounts?.cacheReadInputTokens || 0
+            },
+            totalTokens: block.totalTokens || 0,
+            costUSD: block.costUSD || 0,
+            models: Array.isArray(block.models) ? block.models : [],
+            burnRate: block.burnRate ? {
+                tokensPerMinute: block.burnRate.tokensPerMinute || 0,
+                tokensPerMinuteForIndicator: block.burnRate.tokensPerMinuteForIndicator || 0,
+                costPerHour: block.burnRate.costPerHour || 0
+            } : undefined,
+            projection: block.projection ? {
+                totalTokens: block.projection.totalTokens || 0,
+                totalCost: block.projection.totalCost || 0,
+                remainingMinutes: block.projection.remainingMinutes || 0
+            } : undefined
         };
-    }
-
-    private createProgressBar(percentage: number, width: number = 20): string {
-        const filled = Math.round((percentage / 100) * width);
-        const empty = width - filled;
-
-        let barChar = '█';
-        let emptyChar = '░';
-
-        // Use different colors for different status levels
-        if (percentage >= 90) {
-            barChar = '🔴'; // Critical
-        } else if (percentage >= 75) {
-            barChar = '🟡'; // Warning
-        } else {
-            barChar = '🟢'; // OK
-        }
-
-        return barChar.repeat(Math.max(0, filled)) + emptyChar.repeat(Math.max(0, empty));
     }
 
     private formatTokenCount(tokens: number): string {
@@ -379,15 +309,6 @@ export class TokenWindowMonitor {
             return `${(tokens / 1000).toFixed(1)}K`;
         }
         return tokens.toString();
-    }
-
-    private getStatusIcon(status: string): string {
-        switch (status) {
-            case 'critical': return '🔴';
-            case 'warning': return '🟡';
-            case 'ok': return '🟢';
-            default: return '⚪';
-        }
     }
 
     /**

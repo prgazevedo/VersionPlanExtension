@@ -61,7 +61,9 @@ interface TodayUsageResult {
 
 /**
  * Service wrapper for ccusage CLI tool
- * Provides programmatic access to Claude Code usage statistics via bunx ccusage
+ * Provides programmatic access to Claude Code usage statistics via ccusage @latest
+ *
+ * v3.10.0: Reverted to ccusage CLI for accurate 5-hour window tracking and subscription tier support
  */
 export class CcusageService {
     private static instance: CcusageService;
@@ -72,6 +74,7 @@ export class CcusageService {
 
     constructor() {
         this.claudeDataPath = this.getClaudeDataPath();
+        this.logger.info('[CcusageService] Initialized with ccusage CLI @latest');
     }
 
     public static getInstance(): CcusageService {
@@ -99,18 +102,18 @@ export class CcusageService {
         const executionMethods: ExecutionMethod[] = [
             {
                 runner: 'bunx',
-                command: `bunx ccusage@15.9.7 ${command}`,
+                command: `bunx ccusage@latest ${command}`,
                 errorHint: 'Bun not found. Install from https://bun.sh or the Bun VS Code extension.'
             },
             {
                 runner: 'npx',
-                command: `npx ccusage@15.9.7 ${command}`,
-                errorHint: 'npx is downloading ccusage v15.9.7. This may take a moment on first run.'
+                command: `npx ccusage@latest ${command}`,
+                errorHint: 'npx is downloading ccusage @latest. This may take a moment on first run.'
             },
             {
                 runner: 'npm exec',
-                command: `npm exec --yes -- ccusage@15.9.7 ${command}`,
-                errorHint: 'npm is downloading ccusage v15.9.7. This may take a moment on first run.'
+                command: `npm exec --yes -- ccusage@latest ${command}`,
+                errorHint: 'npm is downloading ccusage @latest. This may take a moment on first run.'
             }
         ];
 
@@ -124,11 +127,33 @@ export class CcusageService {
                     this.logger.debug(`Trying ${method.runner} - ${method.errorHint}`);
                 }
 
+                // Build PATH with common locations for bun/node
+                const existingPath = process.env.PATH || '';
+                const additionalPaths = [
+                    '/opt/homebrew/bin',
+                    '/usr/local/bin',
+                    '/usr/bin',
+                    '/bin',
+                    path.join(os.homedir(), '.bun', 'bin'),
+                    path.join(os.homedir(), '.local', 'bin'),
+                    path.join(os.homedir(), '.cargo', 'bin'),
+                    '/opt/homebrew/opt/openjdk/bin',
+                    path.join(os.homedir(), 'bin')
+                ].filter(p => !existingPath.includes(p)).join(':');
+
+                const enhancedPath = additionalPaths ? `${additionalPaths}:${existingPath}` : existingPath;
+
+                this.logger.debug(`${method.runner} - Using PATH:`, enhancedPath.split(':').slice(0, 5).join(':'));
+
+                // Use shell: true to ensure proper PATH resolution
                 const { stdout, stderr } = await execAsync(method.command, {
                     cwd: this.claudeDataPath,
                     timeout: 30000, // 30 second timeout
+                    shell: '/bin/bash', // Use bash shell explicitly
                     env: {
                         ...process.env,
+                        PATH: enhancedPath,
+                        HOME: os.homedir(),
                         // Ensure ccusage uses the correct data path
                         CLAUDE_PROJECTS_PATH: this.claudeDataPath
                     }
@@ -138,11 +163,36 @@ export class CcusageService {
                     this.logger.debug(`${method.runner} stderr:`, stderr);
                 }
 
+                // Clean up ccusage output - remove warning messages that appear before JSON
+                let cleanOutput = stdout.trim();
+
+                this.logger.debug(`Raw stdout length: ${stdout.length}, first 200 chars: ${stdout.substring(0, 200)}`);
+
+                // Remove ccusage informational messages (e.g., "[ccusage] ⚙ No valid configuration file found")
+                const lines = cleanOutput.split('\n');
+                // Look for line starting with { (object) or [ followed by whitespace/newline (array, not [ccusage])
+                const jsonStartIndex = lines.findIndex(line => {
+                    const trimmed = line.trim();
+                    return trimmed.startsWith('{') || (trimmed.startsWith('[') && (trimmed.length === 1 || trimmed[1] === '\n' || trimmed[1] === ' ' || trimmed[1] === '\r'));
+                });
+
+                if (jsonStartIndex > 0) {
+                    // Remove all non-JSON lines before the actual JSON output
+                    cleanOutput = lines.slice(jsonStartIndex).join('\n');
+                    this.logger.debug(`Removed ${jsonStartIndex} non-JSON lines from ccusage output`);
+                } else if (jsonStartIndex === -1) {
+                    this.logger.error('No JSON found in ccusage output!');
+                    this.logger.error('Full output:', stdout);
+                }
+
+                this.logger.debug(`Clean output length: ${cleanOutput.length}, first 200 chars: ${cleanOutput.substring(0, 200)}`);
                 this.logger.debug(`Successfully executed ccusage with ${method.runner}`);
-                return stdout.trim();
+                return cleanOutput;
 
             } catch (error: any) {
                 lastError = error;
+
+                this.logger.debug(`${method.runner} threw error:`, error.code, error.message);
 
                 // Check if this is a command not found error
                 if (error.code === 'ENOENT' || error.message.includes('command not found')) {
@@ -186,7 +236,7 @@ export class CcusageService {
 
         // All methods failed
         const errorMessage = lastError ? (lastError.message || String(lastError)) : 'All execution methods failed';
-        
+
         // Provide more helpful error message based on what went wrong
         if (errorMessage.includes('ENOENT') || errorMessage.includes('command not found')) {
             throw new Error(
@@ -206,7 +256,7 @@ export class CcusageService {
                 `Usage statistics are temporarily unavailable. Please try again later.`
             );
         }
-        
+
         throw new Error(
             `ccusage initialization failed: ${errorMessage}\n\n` +
             `If this is your first time, ccusage may be downloading. Please wait and try again.\n` +
@@ -283,7 +333,7 @@ export class CcusageService {
      */
     public async getUsageForDateRange(since?: string, until?: string): Promise<any> {
         let command = 'daily --json';
-        
+
         if (since) {
             command += ` --since ${since}`;
         }
@@ -349,9 +399,9 @@ export class CcusageService {
      */
     public async testCcusageAvailability(): Promise<CcusageTestResult> {
         const runners = [
-            { name: 'bunx', command: 'bunx ccusage --version' },
+            { name: 'bunx', command: 'bunx ccusage@latest --version' },
             { name: 'npx', command: 'npx ccusage@latest --version' },
-            { name: 'npm exec', command: 'npm exec --yes -- ccusage --version' }
+            { name: 'npm exec', command: 'npm exec --yes -- ccusage@latest --version' }
         ];
 
         const runnerResults: RunnerResult[] = [];
@@ -456,7 +506,8 @@ export class CcusageService {
         return {
             size: this.cache.size,
             keys,
-            oldestAge: Math.round(oldestAge / 1000) // in seconds
+            oldestAge: Math.round(oldestAge / 1000), // in seconds
+            version: 'ccusage @latest'
         };
     }
 }
